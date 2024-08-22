@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry import LineString, Point
 import time
+import os
 
 def sample_raster_along_line(line, raster, n_points= None):
     # Generate n_points evenly spaced along the line without normalization
@@ -67,7 +68,9 @@ def plot_distance_vs_raster_value(line, raster, line_index, output_folder, polyg
 def main(gpkg_path, raster_path, output_folder, polygon_path=None):
     # Load line geometries from the GeoPackage
     gdf = gpd.read_file(gpkg_path)
-    
+    # check if output folder exists
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
     # Load polygon if provided
     polygon = None
     if polygon_path:
@@ -81,14 +84,18 @@ def main(gpkg_path, raster_path, output_folder, polygon_path=None):
             line = row.geometry
             print(f'Processing line at index {idx}')
             if isinstance(line, LineString):
+                x, y = sample_raster_along_line(line, raster)
+                # save the sampled data to a CSV file
+                np.savetxt(f'{output_folder}/sampled_data_{idx}.csv', np.column_stack((x, y)), delimiter=',', header='Distance,Raster Value', comments='')
                 plot_distance_vs_raster_value(line, raster, idx, output_folder, polygon)
             else:
                 print(f'Skipping non-LineString geometry at index {idx}')
+            
 
 if __name__ == "__main__":
-    gpkg_path = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Perpendiculars\LPM_perpendicular.gpkg"  # Replace with your GeoPackage path
-    raster_path = r"Y:\ATD\GIS\ETF\DoDs\DEMs LIDAR\OpenTopo Downloads\ET_low_LIDAR_2020_1m_DEM.tin.tif"  # Replace with your raster path
-    output_folder = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Perpendiculars"  # Replace with your desired output folder path
-    polygon_path = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Valleys\LPM Valley.gpkg" # Replace with your polygon GeoPackage path
+    gpkg_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\perpendiculars_sparse.gpkg"  # Replace with your GeoPackage path
+    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\slope_2021.tif" # Replace with your raster path
+    output_folder = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\SlopevsDist"  # Replace with your desired output folder path
+    polygon_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\ME_Centerlines_EPSG26913_single.gpkg" # Replace with your polygon GeoPackage path
     
-    main(gpkg_path, raster_path, output_folder, polygon_path)
+    main(gpkg_path, raster_path, output_folder)

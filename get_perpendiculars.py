@@ -1,10 +1,7 @@
 import geopandas as gpd
-from shapely.geometry import LineString, Point, MultiLineString
-from shapely.ops import split
+from shapely.geometry import LineString, MultiLineString
 import numpy as np
-import rasterio
-from rasterio.features import rasterize
-from skimage.morphology import skeletonize
+import os
 
 def create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=5, window=20, output_path=None):
     # Load the centerline from the geopackage
@@ -70,35 +67,12 @@ def create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=5
 
 def main():
 
+    centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\ME_Centerlines_EPSG26913_single.gpkg"
+
+    perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=50, spacing=100, window=30)
     
-    centerline_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Centerlines"
-    input_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons"
-
-    output_segment_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Perpendiculars"
-    if not os.path.exists(output_segment_dir):
-        os.makedirs(output_segment_dir)
-    watersheds = ['LM2', 'LPM', 'MM', 'MPM', 'UM1', 'UM2']
-    
-    for watershed in watersheds:
-        #search for right raster by matching the watershed name
-        for file in os.listdir(input_dir):
-            if watershed in file and file.endswith('.gpkg'):
-                input_path = os.path.join(input_dir, file)
-                print(f"Input: {input_path}")
-                break
-
-        centerline_path = os.path.join(centerline_dir, f'{watershed} centerline.gpkg')
-        output_segment_path = os.path.join(output_segment_dir, f'{watershed}_channel_segmented.gpkg')
-        print(f"Processing watershed: {watershed}")
-        
-        print(f"Centerline: {centerline_path}")
-        print(f"Output: {output_segment_path}\n")
-        #create_centerline(input_path, centerline_path)
-
-        perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=500, window=10)
-        
-        out_perp_path = os.path.join(output_segment_dir, f'{watershed}_perpendicular.gpkg')
-        perp_lines.to_file(out_perp_path, driver='GPKG')
+    out_perp_path = os.path.join(os.path.dirname(centerline_path), f'perpendiculars_sparse.gpkg')
+    perp_lines.to_file(out_perp_path, driver='GPKG')
     
 if __name__ == '__main__':
     main()
