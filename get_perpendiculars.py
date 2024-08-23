@@ -68,11 +68,11 @@ def create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=5
 def main():
 
     centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\ME_Centerlines_EPSG26913_single.gpkg"
-
-    perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=50, spacing=100, window=30)
+    output_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars\perpendiculars_ME.gpkg"
     
-    out_perp_path = os.path.join(os.path.dirname(centerline_path), f'perpendiculars_sparse.gpkg')
-    perp_lines.to_file(out_perp_path, driver='GPKG')
+    perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=150, spacing=5, window=100)
+    
+    perp_lines.to_file(output_path, driver='GPKG')
     
 if __name__ == '__main__':
     main()
