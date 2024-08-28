@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from shapely.geometry import LineString, MultiLineString, Polygon
 import os
-from scipy.signal import savgol_filter
 
 def sample_raster_along_line(line, raster, n_points=None, nodata_value=None):
     if n_points is None:
@@ -46,27 +45,7 @@ def compute_wetted_perimeter(x, y, depth):
             perimeter += segment_length
     return perimeter
 
-def determine_side_of_centerline(point, centerline):
-    nearest_point_on_centerline = centerline.interpolate(centerline.project(point))
-    vector_to_point = np.array([point.x - nearest_point_on_centerline.x, point.y - nearest_point_on_centerline.y])
-    reference_direction = np.array([centerline.coords[-1][0] - centerline.coords[0][0], centerline.coords[-1][1] - centerline.coords[0][1]])
-    side = np.sign(np.cross(reference_direction, vector_to_point))
-    return side
-
-import geopandas as gpd
-import rasterio
-import matplotlib.pyplot as plt
-import numpy as np
-from shapely.geometry import LineString, MultiLineString, Polygon
-import os
-from scipy.signal import savgol_filter
-
-# Other existing functions remain unchanged
-
-def smooth_ratio(ratio, window_length=11, polyorder=3):
-    return savgol_filter(ratio, window_length, polyorder)
-
-def find_leveling_point(x, y, depth_increment=0.1, polynomial_order=4, threshold=0.9, smooth=True, window_length=11, polyorder=3):
+def find_leveling_point(x, y, depth_increment=0.1, polynomial_order=4, threshold=0.9):
     depth = np.arange(min(y), max(y), depth_increment)
     ratio = []
     
@@ -79,31 +58,30 @@ def find_leveling_point(x, y, depth_increment=0.1, polynomial_order=4, threshold
             ratio.append(0)
     
     ratio = np.array(ratio)
-    
-    if smooth:
-        ratio = smooth_ratio(ratio, window_length, polyorder)
-    
     poly_coeffs = np.polyfit(depth, ratio, polynomial_order)
     poly_fit = np.polyval(poly_coeffs, depth)
     
-    # First derivative
-    first_derivative = np.gradient(poly_fit, depth)
+    derivatives = np.gradient(poly_fit, depth)
     
-    # Second derivative (to find inflection points)
-    second_derivative = np.gradient(first_derivative, depth)
+    threshold = np.max(np.abs(derivatives)) * threshold
+    leveling_point_index = np.argmax(np.abs(derivatives) < threshold)
     
-    # Identify potential leveling out point where the second derivative approaches zero
-    inflection_indices = np.where(np.abs(second_derivative) < threshold)[0]
-    
-    if len(inflection_indices) > 0:
-        leveling_out_elevation = depth[inflection_indices[0]]
+    if leveling_point_index is not None:
+        leveling_out_elevation = depth[leveling_point_index]
     else:
         leveling_out_elevation = None
 
     return leveling_out_elevation
 
-def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.05, fig_output_path='', polynomial_order=4, threshold=0.9, smooth=True, window_length=11, polyorder=3):
-    leveling_out_elevation = find_leveling_point(x, y, depth_increment, polynomial_order, threshold, smooth, window_length, polyorder)
+def determine_side_of_centerline(point, centerline):
+    nearest_point_on_centerline = centerline.interpolate(centerline.project(point))
+    vector_to_point = np.array([point.x - nearest_point_on_centerline.x, point.y - nearest_point_on_centerline.y])
+    reference_direction = np.array([centerline.coords[-1][0] - centerline.coords[0][0], centerline.coords[-1][1] - centerline.coords[0][1]])
+    side = np.sign(np.cross(reference_direction, vector_to_point))
+    return side
+
+def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.05, fig_output_path='', polynomial_order=4, threshold=0.9):
+    leveling_out_elevation = find_leveling_point(x, y, depth_increment, polynomial_order, threshold)
 
     depth = np.arange(min(y), max(y), depth_increment)
     ratio = []
@@ -117,20 +95,12 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increm
             ratio.append(0)
     
     ratio = np.array(ratio)
-    
-    if smooth:
-        ratio = smooth_ratio(ratio, window_length, polyorder)
-    
     poly_coeffs = np.polyfit(depth, ratio, polynomial_order)
     poly_fit = np.polyval(poly_coeffs, depth)
-    
-    # First derivative for plotting
-    first_derivative = np.gradient(poly_fit, depth)
     
     plt.figure(figsize=(10, 6))
     plt.plot(depth, ratio, marker='o', linestyle='-', label='Data')
     plt.plot(depth, poly_fit, 'g--', label=f'{polynomial_order}th Degree Polynomial Fit')
-    plt.plot(depth, first_derivative, 'b--', label='First Derivative')
     if leveling_out_elevation is not None:
         plt.axvline(x=leveling_out_elevation, color='red', linestyle='--', label='Leveling-Out Point')
     plt.xlabel('Depth (m)')
@@ -203,7 +173,6 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
             else:
                 geometry_type = line.geom_type
                 print(f'Skipping non-LineString geometry at index {idx} with geometry type: {geometry_type}')
-    
     if left_points and right_points:
         polygon_coords = left_points + right_points[::-1] + [left_points[0]]
         polygon = Polygon([(point.x, point.y) for point in polygon_coords])
@@ -215,13 +184,13 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 
 if __name__ == "__main__":
     perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars\perpendiculars_ME_clipped.gpkg"
-    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021_ME_clip_filtered.tif"
+    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\slope_2021_ME_clip_filtered.tif"
     centerline_gpkg = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\ME_Centerlines_EPSG26913_single.gpkg"
     
-    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\ATD_algorithm\Valley_T0.4_filt_2dir"
+    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\ATD_algorithm\Channel_T0.9_unfilt"
     output_gpkg_name = r"Valley_Footprint.gpkg"
     output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
     
-    threshold = 0.4
+    threshold = 0.9
     
     main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, centerline_gpkg, threshold)
