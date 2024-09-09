@@ -9,7 +9,7 @@ wbe = WbEnvironment()
 dem_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped\MM_clipped.tif"
 
 # Set up working directory, usually where your DEM file is located
-working_dir = "Y:/ATD/GIS/Bennett/Test"
+working_dir = os.path.join(os.path.dirname(dem_path), "WBT_Outputs")
 if not os.path.exists(working_dir):
     os.makedirs(working_dir)
 wbt.set_working_dir(working_dir)

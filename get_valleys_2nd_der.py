@@ -132,7 +132,7 @@ def find_leveling_point_fixed(x, y, depth_increment=0.1, polynomial_order=4,
     # plt.show()
     return leveling_out_elevation
 
-def find_leveling_point_depth(x, y, depth_increment=0.1, polynomial_order=4, smooth=True, 
+def find_leveling_point_depth(x, y, depth_increment=0.01, polynomial_order=4, smooth=True, 
                         window_length=11, polyorder=3, percentile = 20):
     depth = np.arange(min(y), max(y), depth_increment)
     ratio = []
@@ -187,7 +187,7 @@ def find_leveling_point_depth(x, y, depth_increment=0.1, polynomial_order=4, smo
     return leveling_out_elevation
 
 
-def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.05, fig_output_path='', 
+def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.01, fig_output_path='', 
                                                       polynomial_order=4, smooth=False, window_length=5, polyorder=4, 
                                                       print_output=True, second_derivative_num = None, percentile = None):
     
@@ -318,28 +318,17 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 Uncomment to run a Monte Carlo on a single watershed with depth percentile method
 """
     
-# if __name__ == "__main__":
-#     perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Test_CL_perpendiculars_50m.gpkg"
-#     raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped\MM_clipped.tif"
-#     centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped.gpkg"
-#     output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Der_MC_50m"
+if __name__ == "__main__":
+    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Test_CL_perpendiculars_50m.gpkg"
+    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped\MM_clipped.tif"
+    centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped.gpkg"
+    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Depth0.01"
         
-#     # create list of percentile ncrements 
-#     percentile_list = np.arange(1, 30, 1)
-#     derivative_list = np.arange(2, 60, 2)
-    
-#     for der in derivative_list:
-#         output_gpkg_name = f"Valley_Footprint_{der}_derivatives.gpkg"
-#         output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
-        
-#         #skip if output file already exists
-#         if os.path.exists(output_gpkg_path):
-#             print(f"Output file already exists at: {output_gpkg_path}")
-#             continue
-    
+    output_gpkg_name = f"Valley_Footprint_6th_Per_0.01depth.gpkg"
+    output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
 
-#         main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, 
-#             centerline_path, second_derivative_num= der , print_output=False)
+    main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, 
+        centerline_path, percentile = 6, print_output=True)
 
 
 
@@ -348,38 +337,38 @@ Uncomment to run multiple watersheds
 All watersheds must be present in perpendiculars_dir, raster_dir, and centerlines_dir and start with {watershed_prefix}
 e.g. MM_perpendiculars.gpkg, MM_raster.tif, MM_centerline.gpkg
 """
-if __name__ == "__main__":
-    perpendiculars_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars_120m"
-    raster_dir = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped"
-    centerlines_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines"
-    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\120m_perp_Percentile_Testing"
+# if __name__ == "__main__":
+#     perpendiculars_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars_120m"
+#     raster_dir = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped"
+#     centerlines_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines"
+#     output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\120m_perp_Percentile_Testing"
     
-    perpendiculars_paths = [os.path.join(perpendiculars_dir, f) for f in os.listdir(perpendiculars_dir) if f.endswith('.gpkg')]
-    raster_paths = [os.path.join(raster_dir, f) for f in os.listdir(raster_dir) if f.endswith('.tif')]
-    centerline_paths = [os.path.join(centerlines_dir, f) for f in os.listdir(centerlines_dir) if f.endswith('.gpkg')]
+#     perpendiculars_paths = [os.path.join(perpendiculars_dir, f) for f in os.listdir(perpendiculars_dir) if f.endswith('.gpkg')]
+#     raster_paths = [os.path.join(raster_dir, f) for f in os.listdir(raster_dir) if f.endswith('.tif')]
+#     centerline_paths = [os.path.join(centerlines_dir, f) for f in os.listdir(centerlines_dir) if f.endswith('.gpkg')]
     
     
-    for perpendiculars_path, raster_path, centerline_gpkg in zip(perpendiculars_paths, raster_paths, centerline_paths):
+#     for perpendiculars_path, raster_path, centerline_gpkg in zip(perpendiculars_paths, raster_paths, centerline_paths):
         
-        watershed_name = os.path.basename(perpendiculars_path).split('_')[0]
+#         watershed_name = os.path.basename(perpendiculars_path).split('_')[0]
     
 
         
-        #second_derivative_num = 40
-        percentile_list = np.arange(2, 30, 2)
-        #skip if output file already exists
+#         #second_derivative_num = 40
+#         percentile_list = np.arange(2, 30, 2)
+#         #skip if output file already exists
 
-        # #skip if watershed is not equal to MM
-        # if watershed_name != 'MM':
-        #     continue
+#         # #skip if watershed is not equal to MM
+#         # if watershed_name != 'MM':
+#         #     continue
         
-        print(f"Processing watershed: {watershed_name}")
-        for percentile in percentile_list:
-            output_gpkg_name = f"{watershed_name}_Valley_Footprint_{percentile}_Percentile.gpkg"
-            output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
-            if os.path.exists(output_gpkg_path):
-                print(f"Output file already exists at: {output_gpkg_path}")
-                continue
+#         print(f"Processing watershed: {watershed_name}")
+#         for percentile in percentile_list:
+#             output_gpkg_name = f"{watershed_name}_Valley_Footprint_{percentile}_Percentile.gpkg"
+#             output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
+#             if os.path.exists(output_gpkg_path):
+#                 print(f"Output file already exists at: {output_gpkg_path}")
+#                 continue
         
-            main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, 
-                centerline_gpkg, percentile = percentile, print_output=True)
+#             main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, 
+#                 centerline_gpkg, percentile = percentile, print_output=True)

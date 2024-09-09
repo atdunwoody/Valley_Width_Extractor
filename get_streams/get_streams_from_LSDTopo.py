@@ -1,5 +1,39 @@
 import geopandas as gpd
 from shapely.geometry import LineString
+import rasterio
+import geopandas as gpd
+from shapely.geometry import Point
+import os
+from shapely.ops import linemerge
+
+
+def raster_to_points(raster_path, output_gpkg):
+    # Open the raster file
+    with rasterio.open(raster_path) as src:
+        # Read the binary raster
+        raster_data = src.read(1)
+        # Get the transform for pixel-to-world coordinate conversion
+        transform = src.transform
+        
+        # Create a list to store the points
+        points = []
+        
+        # Iterate over each cell in the raster
+        for row in range(raster_data.shape[0]):
+            for col in range(raster_data.shape[1]):
+                # Only process cells where raster value is 1 (or True in binary)
+                if raster_data[row, col] == 1:
+                    # Get the coordinates of the center of the cell
+                    x, y = transform * (col + 0.5, row + 0.5)
+                    points.append(Point(x, y))
+                    
+    # Create a GeoDataFrame from the points
+    gdf = gpd.GeoDataFrame(geometry=points, crs=src.crs)
+
+    # Write the GeoDataFrame to a GeoPackage
+    gdf.to_file(output_gpkg, driver='GPKG')
+    print(f"GeoPackage saved to {output_gpkg}")
+
 def filter_stream_order(input_geojson_path, output_gpkg_path, stream_order_threshold=4):
     # Read the GeoJSON file into a GeoDataFrame
     gdf = gpd.read_file(input_geojson_path)
@@ -14,9 +48,6 @@ def filter_stream_order(input_geojson_path, output_gpkg_path, stream_order_thres
     # Save the filtered GeoDataFrame to a GeoPackage
     filtered_gdf.to_file(output_gpkg_path, driver="GPKG")
 
-
-import geopandas as gpd
-from shapely.geometry import LineString
 
 def connect_points_to_lines(input_gpkg_path, output_gpkg_path):
     # Read the GeoPackage into a GeoDataFrame
@@ -47,9 +78,6 @@ def connect_points_to_lines(input_gpkg_path, output_gpkg_path):
     # Save the resulting GeoDataFrame to a GeoPackage
     lines_gdf.to_file(output_gpkg_path, driver="GPKG")
 
-import geopandas as gpd
-from shapely.ops import linemerge
-from shapely.geometry import MultiLineString
 
 def merge_lines_by_receiver_ji(input_gpkg_path, output_gpkg_path):
     # Read the GeoPackage into a GeoDataFrame
@@ -89,13 +117,16 @@ def merge_lines_by_receiver_ji(input_gpkg_path, output_gpkg_path):
     merged_gdf.to_file(output_gpkg_path, driver="GPKG")
 
 
-input_gpkg_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerline_Points.gpkg"
-output_gpkg_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerlines.gpkg"
-connect_points_to_lines(input_gpkg_path, output_gpkg_path)
-merge_lines_by_receiver_ji(output_gpkg_path, output_gpkg_path)
 
 
-# input_geojson_path = r"C:\LSDTopoTools\Bennett\2021_LIDAR_Bennett_Clip_CN.geojson"
-# output_gpkg_path = r"C:\LSDTopoTools\Bennett\2021_LIDAR_Bennett_Clip_CN_pruned.geojson"
 
-# filter_stream_order(input_geojson_path, output_gpkg_path)
+if __name__ == "__main__":
+    #Input stream derived from whitebox workflows (WBT) (run get_streams.py)
+    input_stream_tif = r"Y:\ATD\GIS\Bennett\Channel Polygons\WBT Channels\streams.tif"
+    streams_as_points = r"Y:\ATD\GIS\Bennett\Channel Polygons\WBT Channels\streams.gpkg"
+    streams_as_lines_gpkg = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerlines.gpkg"
+    #raster_to_points(input_stream_tif, output_point)
+    connect_points_to_lines(streams_as_points, streams_as_lines_gpkg)
+    # Uncomment below for streams produced by LSDTopoTools to join many small lines into a single line
+    #merge_lines_by_receiver_ji(streams_as_lines_gpkg, streams_as_lines_gpkg)
+    
