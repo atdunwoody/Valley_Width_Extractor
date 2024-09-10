@@ -1,6 +1,6 @@
 import os
 import shutil
-from convert_to_ENVI_bil import convert_dem_to_envi_bil
+from utils.convert_to_ENVI_bil import convert_dem_to_envi_bil
 # Define the paths
 tif_folder = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped"
 param_file_path = r"C:\LSDTopoTools\2021_LIDAR.param"

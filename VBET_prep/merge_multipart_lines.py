@@ -19,8 +19,7 @@ def merge_multipart_lines(gpkg_input_path, gpkg_output_path):
     else:
         print("The layer does not contain LineString or MultiLineString geometries.")
 
-# Example usage
-gpkg_input_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerlines_EPSG26913.gpkg"
-gpkg_output_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerlines_EPSG26913_single.gpkg"
+gpkg_input_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped.gpkg"
+gpkg_output_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped_single.gpkg"
 
 merge_multipart_lines(gpkg_input_path, gpkg_output_path)
