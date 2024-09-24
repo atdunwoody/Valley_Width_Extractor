@@ -1,0 +1,10 @@
+# config.yaml
+
+raster_list:
+  - "Y:/ATD/GIS/Bennett/Valley Widths/Valley_Footprints/Hydraulic Model/Max Depth Rasters/ME/ME_1cms.tif"
+
+perpendicular_lines_gpkg: "Y:/ATD/GIS/Bennett/Valley Widths/Valley_Footprints/Hydraulic Model/Perpendiculars/ME_perps_1m.gpkg"
+
+output_directory: "Y:/ATD/GIS/Bennett/Valley Widths/Valley_Footprints/Hydraulic Model/Max Depth Polygons/ME"
+
+polygon_output_gpkg: "Y:/ATD/GIS/Bennett/Valley Widths/Valley_Footprints/Hydraulic Model/Max Depth Polygons/ME/ME_1cms.gpkg"

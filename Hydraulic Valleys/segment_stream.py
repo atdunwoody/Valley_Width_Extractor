@@ -135,6 +135,7 @@ def create_points_along_line(centerline_path, spacing=5, output_path=None):
     
     # Save the points to the same GeoPackage if output path is provided
     if output_path is not None:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         points_gdf.to_file(output_path, driver='GPKG')
     
     return points_gdf
@@ -173,7 +174,7 @@ def create_hydraulic_valleys_input_polygon(centerline_path, out_segmented_poly_p
 
 def main():
 
-    segment_spacing = 5
+    segment_spacing = 20
     max_valley_width = 70
     input_path_list = [r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\ME_clipped.gpkg",
                         r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\MM_clipped.gpkg",

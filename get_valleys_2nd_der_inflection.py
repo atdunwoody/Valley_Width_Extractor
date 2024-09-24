@@ -5,7 +5,7 @@ import numpy as np
 from shapely.geometry import LineString, MultiLineString, Polygon
 import os
 from scipy.signal import savgol_filter
-from statsmodels.tsa.stattools import acf
+
 
 def sample_raster_along_line(line, raster, n_points=None, nodata_value=None):
     if n_points is None:
@@ -86,13 +86,54 @@ def smooth_ratio(ratio, window_length=11, polyorder=3):
     return savgol_filter(ratio, window_length, polyorder)
 
 
-def autocorrelation_analysis(data, lag=10):
-    """Calculate the autocorrelation of the data for a given lag."""
-    autocorr = acf(data, nlags=lag, fft=True)
-    return autocorr
+def find_leveling_point_fixed(x, y, depth_increment=0.1, polynomial_order=4, 
+                             smooth=True, window_length=11, polyorder=2, second_derivative_num = 50):
+    depth = np.arange(min(y), max(y), depth_increment)
+    ratio = []
+    
+    for d in depth:
+        area = compute_cross_sectional_area_trapezoidal(x, y, d)
+        perimeter = compute_wetted_perimeter(x, y, d)
+        if perimeter > 0:
+            ratio.append(area / (perimeter))
+        else:
+            ratio.append(0)
+    
+    ratio = np.array(ratio)
+    
+    if smooth:
+        ratio = smooth_ratio(ratio, window_length, polyorder)
+    
+    poly_coeffs = np.polyfit(depth, ratio, polynomial_order)
+    poly_fit = np.polyval(poly_coeffs, depth)
+    
+    # First derivative
+    first_derivative = np.gradient(poly_fit, depth)
+    
+    # Second derivative (to find inflection points)
+    second_derivative = np.gradient(first_derivative, depth)
+    
+    # Identify potential leveling out point where the second derivative approaches zero
+    inflection_indices = np.where(np.abs(second_derivative) < 1)[0]
+    
+    if len(inflection_indices) > second_derivative_num:
+        #find index in the middle of the inflection points
+        leveling_out_elevation = depth[inflection_indices[second_derivative_num]]
+        print(f"Length of inflection_indices: {len(inflection_indices)}")
+    elif len(inflection_indices) < second_derivative_num and len(inflection_indices) > 0:
+        leveling_out_elevation = depth[inflection_indices[len(inflection_indices)//10]]
+    else:
+        leveling_out_elevation = None
+    #plot first 100 inflection points against elevation as scatter plot
+    # plt.scatter(depth[inflection_indices[:100]], second_derivative[inflection_indices[:100]])
+    # plt.xlabel('Elevation')
+    # plt.ylabel('Second Derivative')
+    # plt.title('Second Derivative vs Elevation')
+    # plt.show()
+    return leveling_out_elevation
 
-def find_leveling_point_autocorr(x, y, depth_increment=0.1, polynomial_order=4, 
-                                smooth=True, window_length=11, polyorder=2, lag=10, threshold=0.5):
+def find_leveling_point_depth(x, y, depth_increment=0.01, polynomial_order=4, smooth=True, 
+                              window_length=11, polyorder=3, percentile=20):
     depth = np.arange(min(y), max(y), depth_increment)
     ratio = []
     
@@ -115,29 +156,49 @@ def find_leveling_point_autocorr(x, y, depth_increment=0.1, polynomial_order=4,
     # First derivative
     first_derivative = np.gradient(poly_fit, depth)
     
-    # Second derivative (to find inflection points)
+    # Second derivative to find inflection points
     second_derivative = np.gradient(first_derivative, depth)
     
-    # Perform autocorrelation analysis on the second derivative
-    autocorr = autocorrelation_analysis(second_derivative, lag)
+    # Identify inflection points where the second derivative crosses zero
+    zero_crossings = np.where(np.diff(np.sign(second_derivative)))[0]
     
-    # Detect significant drop in autocorrelation
-    significant_drop_idx = np.where(np.abs(np.diff(autocorr)) > threshold)[0]
+    # Calculate the true depth to filter out shallow regions
+    true_depth = depth - min(depth)
+    channel_depth_threshold = np.percentile(true_depth, percentile)
     
-    if len(significant_drop_idx) > 0:
-        leveling_out_elevation = depth[significant_drop_idx[0]]
+    # Filter zero crossings to find valid inflection points above the threshold depth
+    filtered_zero_crossings = [idx for idx in zero_crossings if true_depth[idx] > channel_depth_threshold]
+    
+    print(f"Max depth: {max(true_depth)}")
+    
+    # Determine the leveling out elevation based on the identified inflection points
+    if len(filtered_zero_crossings) > 1:
+        leveling_out_elevation = depth[filtered_zero_crossings[1]]  # Select the second valid inflection point
+    elif len(filtered_zero_crossings) == 1:
+        leveling_out_elevation = depth[filtered_zero_crossings[0]]  # If only one inflection point is found
     else:
-        leveling_out_elevation = None
+        # If no inflection points are found, use the largest difference in the second derivative
+        max_diff_index = np.argmax(np.abs(np.diff(second_derivative)))
+        leveling_out_elevation = depth[max_diff_index] if max_diff_index < len(depth) else None
     
     return leveling_out_elevation
 
-def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.05, fig_output_path='', 
-                                                      polynomial_order=4, smooth=True, window_length=11, polyorder=3, 
-                                                      print_output=True, lag=10, threshold=0.01):
-    
-    leveling_out_elevation = find_leveling_point_autocorr(x, y, depth_increment, polynomial_order, 
-                                                          smooth, window_length, polyorder, lag, threshold)
 
+
+def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.01, fig_output_path='', 
+                                                      polynomial_order=4, smooth=False, window_length=5, polyorder=4, 
+                                                      print_output=True, second_derivative_num = None, percentile = None):
+    
+    if second_derivative_num is not None:
+        leveling_out_elevation = find_leveling_point_fixed(x, y, depth_increment, polynomial_order, 
+                                                        smooth, window_length, polyorder, second_derivative_num)
+
+    elif percentile is not None:
+        leveling_out_elevation = find_leveling_point_depth(x, y, depth_increment, polynomial_order, 
+                                                       smooth, window_length, polyorder, percentile)
+    else:
+        raise ValueError("Must specify either second_derivative_num or percentile")
+    
     depth = np.arange(min(y), max(y), depth_increment)
     ratio = []
     
@@ -145,7 +206,8 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increm
         area = compute_cross_sectional_area_trapezoidal(x, y, d)
         perimeter = compute_wetted_perimeter(x, y, d)
         if perimeter > 0:
-            ratio.append(area / perimeter ** 2)
+            #ratio.append((area / (perimeter ** 4)) ** 0.25)
+            ratio.append(area / (perimeter ** 2))
         else:
             ratio.append(0)
     
@@ -169,7 +231,7 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increm
         if leveling_out_elevation is not None:
             plt.axvline(x=leveling_out_elevation, color='red', linestyle='--', label='Leveling-Out Point')
         plt.xlabel('Depth (m)')
-        plt.ylabel('Cross-Sectional Area / Wetted Perimeter ** 2')
+        plt.ylabel('Cross-Sectional Area / Wetted Perimeter ** 4')
         plt.title(f'Cross-Sectional Area / Wetted Perimeter vs. Depth (Index: {idx})')
         plt.legend()
         plt.grid(True)
@@ -180,10 +242,8 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increm
 
     return leveling_out_elevation
 
-
-def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, 
-         centerline_gpkg=None, second_derivative_num = 50, print_output=True,
-         threshold=0.05):
+def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerline_gpkg=None, 
+         second_derivative_num = None, percentile = None, print_output=True):
     gdf = gpd.read_file(gpkg_path)
     centerline_gdf = gpd.read_file(centerline_gpkg)
     centerline = centerline_gdf.geometry.iloc[0]
@@ -214,8 +274,8 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None,
                 #np.savetxt(f'{output_folder}/sampled_data_{idx}.csv', np.column_stack((valid_distances, valid_raster_values)), delimiter=',', header='Distance,Raster Value', comments='')
                 
                 leveling_out_elevation = plot_cross_section_area_to_wetted_perimeter_ratio(valid_distances, valid_raster_values, idx=idx, 
-                                                                                           fig_output_path=output_folder, 
-                                                                                           print_output=print_output, threshold=threshold)
+                                                                                           fig_output_path=output_folder, print_output=print_output, 
+                                                                                           second_derivative_num = second_derivative_num, percentile = percentile)
                 
                 if leveling_out_elevation is not None:
                     sides = np.array([determine_side_of_centerline(point, centerline) for point in valid_points])
@@ -251,31 +311,62 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None,
         print(f"Polygon GeoPackage created at: {output_gpkg_path}")
 
 
+
+"""
+Uncomment to run a Monte Carlo on a single watershed with depth percentile method
+"""
+    
+# if __name__ == "__main__":
+#     perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Test_CL_perpendiculars_50m.gpkg"
+#     raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped\MM_clipped.tif"
+#     centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped.gpkg"
+#     output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Depth0.01"
+        
+#     output_gpkg_name = f"Valley_Footprint_6th_Per_0.01depth.gpkg"
+#     output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
+
+#     main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, 
+#         centerline_path, percentile = 6, print_output=True)
+
+
+
+"""
+Uncomment to run multiple watersheds
+All watersheds must be present in perpendiculars_dir, raster_dir, and centerlines_dir and start with {watershed_prefix}
+e.g. MM_perpendiculars.gpkg, MM_raster.tif, MM_centerline.gpkg
+"""
 if __name__ == "__main__":
-    perpendiculars_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars"
+    perpendiculars_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars_120m"
     raster_dir = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped"
     centerlines_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines"
+    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\120m_perp_Percentile_Testing"
     
     perpendiculars_paths = [os.path.join(perpendiculars_dir, f) for f in os.listdir(perpendiculars_dir) if f.endswith('.gpkg')]
     raster_paths = [os.path.join(raster_dir, f) for f in os.listdir(raster_dir) if f.endswith('.tif')]
     centerline_paths = [os.path.join(centerlines_dir, f) for f in os.listdir(centerlines_dir) if f.endswith('.gpkg')]
     
+    
     for perpendiculars_path, raster_path, centerline_gpkg in zip(perpendiculars_paths, raster_paths, centerline_paths):
         
         watershed_name = os.path.basename(perpendiculars_path).split('_')[0]
     
-        output_folder = os.path.join(r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints", watershed_name)
 
-        #create threshold array from 0.01 to 0.1 in 0.005 increments
-        thresholds = np.arange(0.01, 0.1, 0.005)
-        for threshold in thresholds:
-            output_gpkg_name = f"Valley_Footprint_Full_autocorr_{threshold}.gpkg"
+        
+        #second_derivative_num = 40
+        percentile_list = [20]
+        #skip if output file already exists
+
+        # #skip if watershed is not equal to MM
+        # if watershed_name != 'MM':
+        #     continue
+        
+        print(f"Processing watershed: {watershed_name}")
+        for percentile in percentile_list:
+            output_gpkg_name = f"{watershed_name}_Valley_Footprint_{percentile}_Percentile.gpkg"
             output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
-            #skip if output file already exists
             if os.path.exists(output_gpkg_path):
                 print(f"Output file already exists at: {output_gpkg_path}")
                 continue
-            print(f"Processing watershed: {watershed_name}")
-            print(f"Output geopackage path: {output_gpkg_path}")
+        
             main(perpendiculars_path, raster_path, output_folder, output_gpkg_path, 
-                centerline_gpkg, threshold=threshold, print_output=False)
+                centerline_gpkg, percentile = percentile, print_output=True)

@@ -6,7 +6,7 @@ wbt = whitebox.WhiteboxTools()
 
 # Set the environment and path to DEM
 wbe = WbEnvironment()
-dem_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped\MM_clipped.tif"
+dem_path = r"Y:\ATD\Drone Data Processing\Metashape_Processing\Bennett\062023-062022\UW\UW_062023-062022 Exports\UW_062023-062022____062023_PostError_PCFiltered_DEM.tif"
 
 # Set up working directory, usually where your DEM file is located
 working_dir = os.path.join(os.path.dirname(dem_path), "WBT_Outputs")

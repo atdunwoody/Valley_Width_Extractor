@@ -54,7 +54,6 @@ def determine_side_of_centerline(point, centerline):
     side = np.sign(np.cross(reference_direction, vector_to_point))
     return side
 
-
 def smooth_ratio(ratio, window_length=11, polyorder=3):
     return savgol_filter(ratio, window_length, polyorder)
 
