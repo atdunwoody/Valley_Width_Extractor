@@ -79,16 +79,14 @@ def process_rasters(input_dir, output_dir, default_crs):
 
 def main():
     
-    # Hardcoded paths
-    watersheds = ["MM", "MW", "UM", "UW",  "UE"]
-    for watershed in watersheds:
-        input_directory= os.path.join(r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Max Depth Rasters", watershed)  # Replace with your input raster path
-        output_directory = os.path.join(r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Max Depth Rasters CRS", watershed)
-        os.makedirs(output_directory, exist_ok=True)
-        # Define the CRS to assign if missing
-        DEFAULT_CRS = 'EPSG:26913'
 
-        process_rasters(input_directory, output_directory, DEFAULT_CRS)
+    input_directory= r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Results\Inflection Point"
+    output_directory = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Results\Inflection Point\CRS"
+    os.makedirs(output_directory, exist_ok=True)
+    # Define the CRS to assign if missing
+    DEFAULT_CRS = 'EPSG:26913'
+
+    process_rasters(input_directory, output_directory, DEFAULT_CRS)
 
 if __name__ == "__main__":
     main()

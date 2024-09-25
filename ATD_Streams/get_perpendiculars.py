@@ -70,24 +70,24 @@ def main():
     """
     Uncomment below to get perpendiculars for all centerlines in a directory
     """
-    centerline_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines"
-    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars_120m"
+    # centerline_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines"
+    # output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars_120m"
     
-    centerline_paths = [os.path.join(centerline_dir, f) for f in os.listdir(centerline_dir) if f.endswith('.gpkg')]
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-    for centerline_path in centerline_paths:
-        perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=120, spacing=5, window=100)
-        output_path = os.path.join(output_dir, os.path.basename(centerline_path)[0:2] + '_perpendiculars_120m.gpkg')
-        perp_lines.to_file(output_path, driver='GPKG')
+    # centerline_paths = [os.path.join(centerline_dir, f) for f in os.listdir(centerline_dir) if f.endswith('.gpkg')]
+    # if not os.path.exists(output_dir):
+    #     os.makedirs(output_dir)
+    # for centerline_path in centerline_paths:
+    #     perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=120, spacing=5, window=100)
+    #     output_path = os.path.join(output_dir, os.path.basename(centerline_path)[0:2] + '_perpendiculars_120m.gpkg')
+    #     perp_lines.to_file(output_path, driver='GPKG')
     
     """
     Uncomment below to get perpendiculars for a single centerline
     """
-    # centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped.gpkg"
-    # output_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\MM_Perpendiculkars_Smoothed.gpkg"
-    # perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length = 50, spacing=10, window=100, output_path=output_path)
-    # perp_lines.to_file(output_path, driver='GPKG')
+    centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Valley_CL_smooth.gpkg"
+    output_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Perpendiculars_10m.gpkg"
+    perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length = 200, spacing=10, window=200, output_path=output_path)
+    perp_lines.to_file(output_path, driver='GPKG')
     
 if __name__ == '__main__':
     main()

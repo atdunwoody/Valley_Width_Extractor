@@ -171,8 +171,8 @@ def plot_cross_section(segment_idx, distances, elevations, flow_depth, output_di
         # Set new x-axis limits
         new_min = max(np.min(distances), min_intersect - padding)
         new_max = min(np.max(distances), max_intersect + padding)
-        plt.xlim(new_min, new_max)
-
+        #plt.xlim(new_min, new_max)
+        plt.xlim(90, 190)
     # Save the plot
     plot_filename = os.path.join(output_dir, f'segment_{segment_idx}_cross_section.png')
     plt.savefig(plot_filename, dpi=300)
@@ -192,6 +192,9 @@ def main():
     # Setup logging
     log_level = getattr(logging, config.get('logging', {}).get('level', 'INFO').upper(), logging.INFO)
     log_file = config.get('logging', {}).get('log_file', 'plot_tertrain_vs_depth.log')
+    # create output directory if it doesn't exist
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    
     setup_logging(log_file, level=log_level)
     logging.info("Logging is set up.")
 

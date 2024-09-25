@@ -181,7 +181,7 @@ def extract_max_depths_by_segment(shapefile, flow_raster_dict, percentile=90):
 
     return segment_depths
 
-def smooth_data(data, window_length=5, polyorder=2, smooth = False):
+def smooth_data(data, window_length=5, polyorder=2, smooth=False):
     """
     Applies Savitzky-Golay filter for data smoothing.
 
@@ -189,6 +189,7 @@ def smooth_data(data, window_length=5, polyorder=2, smooth = False):
         data (array-like): Input data to smooth.
         window_length (int): Length of the filter window (must be odd).
         polyorder (int): Order of the polynomial used to fit the samples.
+        smooth (bool): Whether to apply smoothing.
 
     Returns:
         np.ndarray: Smoothed data.
@@ -240,34 +241,23 @@ def find_leveling_out_point(flow_values, smoothed_depths):
         int: Index of the leveling out point.
     """
     try:
+        # Calculate first and second derivatives
         first_derivative = np.gradient(smoothed_depths, flow_values)
         second_derivative = np.gradient(first_derivative, flow_values)
 
-        zero_crossings = np.where(np.diff(np.sign(second_derivative)))[0]
-        
-        # Find the index where the second derivative changes sign
-        if len(zero_crossings) >= 1:
-            leveling_out_index = zero_crossings[0]
-            logging.debug(f"Zero crossing found at index {leveling_out_index}")
-        else:
-            # If no inflection points are found, use the largest difference in the second derivative
-            leveling_out_index = np.argmax(np.abs(np.diff(second_derivative)))
-            logging.debug(f"No zero crossing found. Using max diff index {leveling_out_index}")
-             
+        # Identify the point with the most significant decrease in slope
+        # This can be interpreted as the point where the second derivative is minimized
+        leveling_out_index = np.argmin(second_derivative)
+        logging.debug(f"Leveling out point identified at index {leveling_out_index} with flow {flow_values[leveling_out_index]}")
+
         return leveling_out_index
     except Exception as e:
         logging.error(f"Error finding leveling out point: {e}")
         return len(flow_values) - 1  # Default to the last index
 
-import matplotlib.pyplot as plt
-import numpy as np
-import os
-import logging
-
 def plot_flow_vs_depth_by_segment(segment_depths, percentile, output_dir):
     """
-    Plots flow value vs depth for each segment along with their first and second derivatives,
-    and identifies the leveling out point where the depth's rate of increase decreases significantly.
+    Plots flow value vs depth for each segment and identifies the leveling out point.
 
     Parameters:
         segment_depths (dict): Nested dictionary mapping segment indices to flow values and depths.
@@ -297,16 +287,12 @@ def plot_flow_vs_depth_by_segment(segment_depths, percentile, output_dir):
 
         # Replace NaNs with nearest valid value or interpolate
         if np.isnan(sorted_max_depths_np).any():
-            # Simple interpolation to fill NaNs
+            # Simple forward fill, can be replaced with more sophisticated methods if needed
             nan_indices = np.isnan(sorted_max_depths_np)
-            valid_indices = ~nan_indices
-            if valid_indices.sum() == 0:
-                logging.warning(f"Segment {segment_idx}: No valid depth data available after NaN removal. Skipping.")
-                continue
             sorted_max_depths_np[nan_indices] = np.interp(
                 np.flatnonzero(nan_indices),
-                np.flatnonzero(valid_indices),
-                sorted_max_depths_np[valid_indices]
+                np.flatnonzero(~nan_indices),
+                sorted_max_depths_np[~nan_indices]
             )
         
         # Smooth the max depths
@@ -319,62 +305,63 @@ def plot_flow_vs_depth_by_segment(segment_depths, percentile, output_dir):
         poly = fit_polynomial(sorted_flow_values_np, smoothed_depths)
         fitted_values = poly(sorted_flow_values_np)
         
-        # Calculate derivatives
+        # Calculate derivatives for additional analysis or debugging
         first_derivative = np.gradient(smoothed_depths, sorted_flow_values_np)
         second_derivative = np.gradient(first_derivative, sorted_flow_values_np)
         
-        # Initialize the plot with subplots
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
+        # Plot original and smoothed data along with fitted polynomial
+        plt.figure(figsize=(12, 8))
         
-        # ---- Top Subplot: Flow vs Depth ----
-        ax1.plot(
+        plt.subplot(2, 1, 1)
+        plt.plot(
             sorted_flow_values_np, sorted_max_depths_np, 
-            marker='o', linestyle='-', label=f'Original Depths ({percentile}th percentile)'
+            marker='o', label=f'Original Depths at {percentile}th percentile'
         )
-        ax1.plot(
+        plt.plot(
             sorted_flow_values_np, smoothed_depths, 
-            linestyle='-', label='Smoothed Depths', color='orange'
+            label='Smoothed Depths', color='orange'
         )
-        ax1.plot(
+        plt.plot(
             sorted_flow_values_np, fitted_values, 
-            linestyle='--', label='Fitted Polynomial', color='green'
+            label='Fitted Polynomial', color='green'
         )
-        if 0 <= leveling_out_index < len(sorted_flow_values_np):
-            leveling_out_flow = sorted_flow_values_np[leveling_out_index]
-            ax1.axvline(
-                leveling_out_flow, 
+        if leveling_out_index < len(sorted_flow_values_np):
+            plt.axvline(
+                sorted_flow_values_np[leveling_out_index], 
                 color='red', linestyle='--', 
-                label=f'Leveling Out at Flow = {leveling_out_flow:.2f}'
+                label=f'Leveling Out at Flow = {sorted_flow_values_np[leveling_out_index]:.2f}'
             )
-            flow_value_dict[segment_idx] = leveling_out_flow
+            flow_value_dict[segment_idx] = sorted_flow_values_np[leveling_out_index]
         else:
             logging.warning(f"Segment {segment_idx}: Leveling out index out of range.")
             flow_value_dict[segment_idx] = sorted_flow_values_np[-1]
         
-        ax1.set_title(f'Segment {segment_idx}: Flow vs Depth ({percentile}th Percentile)')
-        ax1.set_ylabel('Depth')
-        ax1.grid(True)
-        ax1.legend()
+        plt.title(f'Segment {segment_idx}: Flow vs Depth at {percentile}th Percentile')
+        plt.xlabel('Flow Value')
+        plt.ylabel(f'Depth ({percentile}th Percentile)')
+        plt.grid(True)
+        plt.legend()
         
-        # ---- Bottom Subplot: Derivatives ----
-        ax2.plot(sorted_flow_values_np, first_derivative, label='First Derivative', color='blue')
-        ax2.plot(sorted_flow_values_np, second_derivative, label='Second Derivative', color='brown')
-        if 0 <= leveling_out_index < len(sorted_flow_values_np):
-            ax2.axvline(
-                leveling_out_flow, 
+        # Plot first and second derivatives
+        plt.subplot(2, 1, 2)
+        plt.plot(sorted_flow_values_np, first_derivative, label='First Derivative', color='purple')
+        plt.plot(sorted_flow_values_np, second_derivative, label='Second Derivative', color='brown')
+        if leveling_out_index < len(sorted_flow_values_np):
+            plt.axvline(
+                sorted_flow_values_np[leveling_out_index], 
                 color='red', linestyle='--', 
-                label=f'Leveling Out at Flow = {leveling_out_flow:.2f}'
+                label=f'Leveling Out at Flow = {sorted_flow_values_np[leveling_out_index]:.2f}'
             )
-        ax2.set_title('Derivatives of Flow vs Depth')
-        ax2.set_xlabel('Flow Value')
-        ax2.set_ylabel('Derivative')
-        ax2.grid(True)
-        ax2.legend()
+        plt.title(f'Segment {segment_idx}: Derivatives of Flow vs Depth')
+        plt.xlabel('Flow Value')
+        plt.ylabel('Derivative')
+        plt.grid(True)
+        plt.legend()
         
         plt.tight_layout()
         
-        # Save the combined plot
-        plot_path = os.path.join(plots_dir, f'segment_{segment_idx}_flow_depth_derivatives_plot.png')
+        # Save the plot instead of showing
+        plot_path = os.path.join(plots_dir, f'segment_{segment_idx}_flow_depth_plot.png')
         plt.savefig(plot_path)
         plt.close()
         
@@ -404,7 +391,7 @@ def main():
     }
 
     scratch_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Clipped_Rasters"
-    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Results\Inflection Point"
+    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Results\Inflection Slope Change"
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(scratch_dir, exist_ok=True)
 

@@ -420,7 +420,7 @@ def main():
     }
 
     scratch_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Clipped_Rasters"
-    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Results Inflection"
+    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leveling Test\Results\Inflection Point Windowed"
     os.makedirs(output_dir, exist_ok=True)
     os.makedirs(scratch_dir, exist_ok=True)
 

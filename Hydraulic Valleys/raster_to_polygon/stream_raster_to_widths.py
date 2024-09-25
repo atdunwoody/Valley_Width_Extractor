@@ -1,23 +1,16 @@
-#!/usr/bin/env python3
+# raster_processor.py
 
 import os
-import yaml
 import rasterio
-from rasterio.features import geometry_mask
+from rasterio.features import shapes
 import geopandas as gpd
-from shapely.geometry import box, Polygon, LineString, Point, shape, MultiPolygon
+from shapely.geometry import shape, Polygon, LineString, Point, MultiLineString, MultiPolygon
 from shapely.ops import unary_union
 import logging
 import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-
-def load_config(config_path):
-    """Load configuration from a YAML file."""
-    with open(config_path, 'r') as file:
-        config = yaml.safe_load(file)
-    return config
 
 def get_valid_geometry(raster_path):
     """
@@ -36,11 +29,11 @@ def get_valid_geometry(raster_path):
             valid_mask = band1 != nodata
 
         # Convert the valid mask to polygons
-        shapes = rasterio.features.shapes(band1, mask=valid_mask, transform=src.transform)
+        shapes_gen = shapes(band1, mask=valid_mask, transform=src.transform)
         polygons = []
-        for geom, value in shapes:
+        for geom, value in shapes_gen:
             if value:  # Only keep valid areas
-                poly = shape(geom)  # Correctly convert dict to Shapely geometry
+                poly = shape(geom)  # Convert dict to Shapely geometry
                 if poly.is_valid:
                     polygons.append(poly)
                 else:
@@ -121,17 +114,16 @@ def create_connected_polygon(lines_gdf):
     polygon_gdf = gpd.GeoDataFrame([{'geometry': polygon}], crs=lines_gdf.crs)
     return polygon_gdf
 
-def main():
-    # Path to the config.yaml file
-    config_path = r"Hydraulic Valleys\raster_to_polygon\config.yaml"
+def process_rasters(raster_list, lines_gpkg_path, output_dir, polygon_output_gpkg):
+    """
+    Process a list of rasters to extract widths and save outputs to GPKG files.
 
-    # Load configuration
-    config = load_config(config_path)
-    raster_list = config.get('raster_list', [])
-    lines_gpkg_path = config.get('perpendicular_lines_gpkg')
-    output_dir = config.get('output_directory', 'output/')
-    polygon_output_gpkg = config.get('polygon_output_gpkg')
-
+    Args:
+        raster_list (list): List of raster file paths.
+        lines_gpkg_path (str): Path to the perpendicular lines GeoPackage.
+        output_dir (str): Directory to save the output GPKG files.
+        polygon_output_gpkg (str): Path to save the connected polygon GPKG.
+    """
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
@@ -147,6 +139,11 @@ def main():
     if lines_gdf.empty:
         logging.error("No LineString geometries found in perpendicular lines GeoPackage.")
         return
+
+    # Convert all LineStrings to MultiLineStrings to ensure consistency
+    lines_gdf['geometry'] = lines_gdf['geometry'].apply(
+        lambda geom: MultiLineString([geom]) if isinstance(geom, LineString) else geom
+    )
 
     # Process each raster
     for raster_path in raster_list:
@@ -167,11 +164,20 @@ def main():
             logging.warning(f"No lines clipped for raster: {raster_name}")
             continue
 
+        # Ensure all geometries are MultiLineStrings
+        clipped_lines['geometry'] = clipped_lines['geometry'].apply(
+            lambda geom: MultiLineString([geom]) if isinstance(geom, LineString) else geom
+        )
+
+        # Calculate widths (lengths of the clipped lines)
+        clipped_lines['width'] = clipped_lines.length
+        logging.info(f"Calculated widths for clipped lines in raster: {raster_name}")
+
         # Define output GeoPackage path
         output_gpkg = os.path.join(output_dir, f"{raster_name}.gpkg")
 
-        # Save clipped lines
-        save_gpkg(clipped_lines, output_gpkg, layer_name='clipped_lines')
+        # Save clipped lines with widths
+        save_gpkg(clipped_lines, output_gpkg)
 
     # Create connected polygon
     logging.info("Creating connected polygon from perpendicular lines.")
@@ -182,8 +188,5 @@ def main():
         return
 
     # Save the polygon to GeoPackage
-    polygon_gdf.to_file(polygon_output_gpkg, layer='connected_polygon', driver="GPKG")
+    polygon_gdf.to_file(polygon_output_gpkg, driver="GPKG")
     logging.info(f"Saved connected polygon to {polygon_output_gpkg}")
-
-if __name__ == "__main__":
-    main()
