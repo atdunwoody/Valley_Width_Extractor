@@ -9,6 +9,8 @@ from datetime import datetime
 import sys
 import pandas as pd
 from scipy.signal import savgol_filter  # Removed find_peaks as it's no longer needed
+import json  # Added to handle JSON operations
+from tqdm import tqdm  # Import tqdm for progress bar
 
 # ----------------------------- Sampling Function ----------------------------- #
 
@@ -27,7 +29,7 @@ def sample_raster_along_line(line, raster, n_points=None, nodata_value=None):
         values (list): Raster values at the sampled points.
         points_valid (list): Shapely Point objects of valid sampled points.
     """
-    logging.debug(f"Entering sample_raster_along_line with parameters: n_points={n_points}, nodata_value={nodata_value}")
+    logging.info(f"Entering sample_raster_along_line with parameters: n_points={n_points}, nodata_value={nodata_value}")
     if n_points is None:
         n_points = int(line.length)
     distances = np.linspace(0, line.length, n_points)
@@ -75,7 +77,7 @@ def sample_raster_along_line(line, raster, n_points=None, nodata_value=None):
         distances_valid = distances_valid[nodata_mask]
         points_valid = [points_valid[i] for i in range(len(points_valid)) if nodata_mask[i]]
 
-    logging.debug(f"Sampled {len(values)} valid raster points out of {n_points if n_points else 'variable'} requested.")
+    logging.info(f"Sampled {len(values)} valid raster points out of {n_points if n_points else 'variable'} requested.")
     return distances_valid.tolist(), values.tolist(), points_valid
 
 # ------------------------- Hydraulic Computation Functions --------------------- #
@@ -141,9 +143,6 @@ def compute_wetted_perimeter(x, y, depth):
 
 # ---------------------------- Centerline Side Function ------------------------- #
 
-import numpy as np
-from shapely.geometry import LineString, MultiLineString, Point
-
 def determine_side_of_centerline(points, centerline):
     """
     Determine the side of each point relative to the centerline.
@@ -156,7 +155,8 @@ def determine_side_of_centerline(points, centerline):
         sides (np.array): Array indicating side (-1: left, 1: right, 0: on centerline).
     """
     if isinstance(centerline, MultiLineString):
-        centerline = LineString([pt for line in centerline for pt in line.coords])
+        # Use the 'geoms' property to access individual LineStrings
+        centerline = LineString([pt for line in centerline.geoms for pt in line.coords])
     elif not isinstance(centerline, LineString):
         raise TypeError("centerline must be a LineString or MultiLineString")
 
@@ -239,14 +239,14 @@ def find_damping_onset_by_rolling_variance(depth, second_derivative, window_size
     
     # Calculate rolling variance
     rolling_var = sd_series.rolling(window=window_size, min_periods=1).var()
-    logging.debug(f"Rolling variance computed with window size {window_size}.")
+    logging.info(f"Rolling variance computed with window size {window_size}.")
 
     # Calculate the first derivative of the rolling variance
     rolling_var_diff = rolling_var.diff()
 
     # Identify where the rolling variance starts decreasing
     damping_candidates = np.where(rolling_var_diff < 0)[0]
-    logging.debug(f"Number of damping candidates (where rolling variance decreases): {len(damping_candidates)}.")
+    logging.info(f"Number of damping candidates (where rolling variance decreases): {len(damping_candidates)}.")
 
     if len(damping_candidates) == 0:
         logging.warning("No decreasing trend found in rolling variance for damping onset detection.")
@@ -271,7 +271,7 @@ def find_damping_onset_by_rolling_variance(depth, second_derivative, window_size
 
 def plot_cross_section_area_to_wetted_perimeter_ratio(
     x, y, idx='', depth_increment=0.1, fig_output_path='', 
-    print_output=True, leveling_out_elevation=None, window_size=11, poly_order=2, desired_inflection=1,
+    print_output=True, leveling_out_elevation=None, window_size=11, poly_order=2,
     rolling_window_size=50, min_consecutive_decreases=5
 ):
     """
@@ -288,7 +288,6 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
         leveling_out_elevation (float): Depth at which leveling-out occurs.
         window_size (int): Window size for the smoothing filter.
         poly_order (int): Polynomial order for the smoothing filter.
-        desired_inflection (int): Which inflection point to select (1 for first, 2 for second, etc.).
         rolling_window_size (int): Window size for rolling variance.
         min_consecutive_decreases (int): Minimum consecutive decreases to confirm damping.
 
@@ -302,7 +301,7 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
     # Define depth array based on the full range since leveling_out_elevation will be determined by damping_onset_depth
     depth = np.arange(min(y), max(y), depth_increment)
 
-    logging.debug(f"Depth array created with {len(depth)} points ranging from {depth.min()} to {depth.max()} meters.")
+    logging.info(f"Depth array created with {len(depth)} points ranging from {depth.min()} to {depth.max()} meters.")
 
     # Compute cross-sectional areas and wetted perimeters
     y_adjusted = np.maximum(depth[:, np.newaxis] - y, 0)
@@ -402,7 +401,7 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
 
         # Save the figure
         if fig_output_path:
-            fig_save_path1 = os.path.join(fig_output_path, f'{idx}_hydraulic_radius_vs_depth.png')
+            fig_save_path1 = os.path.join(fig_output_path, "Plots", f'{idx}_hydraulic_radius_vs_depth.png')
             fig.savefig(fig_save_path1)
             plt.close(fig)
 
@@ -411,7 +410,7 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
 # ------------------------------ Main Function ----------------------------------- #
 
 def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerline_gpkg=None, 
-         depth_increment=0.1, print_output=True, window_size=11, poly_order=2, desired_inflection=1,
+         depth_increment=0.1, print_output=True, window_size=11, poly_order=2, 
          rolling_window_size=50, min_consecutive_decreases=5):
     """
     Main function to process GeoPackage lines, compute hydraulic radii, determine leveling-out elevations,
@@ -427,18 +426,33 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
         print_output (bool): Whether to generate and save plots.
         window_size (int): Window size for the Savitzky-Golay smoothing filter (must be odd and > poly_order).
         poly_order (int): Polynomial order for the Savitzky-Golay smoothing filter.
-        desired_inflection (int): Which inflection point to select (1 for first, 2 for second, etc.).
         rolling_window_size (int): Window size for rolling variance analysis.
         min_consecutive_decreases (int): Minimum consecutive decreases in rolling variance to confirm damping.
     """
     # Setup logging
     log_file = os.path.join(output_folder, f'processing_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    logging.basicConfig(level=logging.DEBUG,  # Set to DEBUG for detailed logs
-                        format='%(asctime)s %(levelname)s: %(message)s',
-                        handlers=[
-                            logging.FileHandler(log_file),
-                            logging.StreamHandler()
-                        ])
+
+    # Create logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Remove all handlers associated with the root logger object (if any)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
+    # Create file handler for logging INFO and above
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+
+    # Create console handler for logging WARNING and above
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.WARNING)
+    console_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
     # Log the path of the executed script
     script_path = os.path.abspath(sys.argv[0])
@@ -455,7 +469,6 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
     logging.info(f"  print_output: {print_output}")
     logging.info(f"  window_size: {window_size}")
     logging.info(f"  poly_order: {poly_order}")
-    logging.info(f"  desired_inflection: {desired_inflection}")
     logging.info(f"  rolling_window_size: {rolling_window_size}")
     logging.info(f"  min_consecutive_decreases: {min_consecutive_decreases}")
 
@@ -492,6 +505,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 
     left_points = []
     right_points = []
+    flow_depths = {}  # Dictionary to store flow depths for each segment
 
     try:
         with rasterio.open(raster_path) as raster:
@@ -503,7 +517,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
             prior_leveling_out_elevation = None
 
             # Iterate through each line using a for loop to maintain state
-            for idx, row in gdf.iterrows():
+            for idx, row in tqdm(gdf.iterrows(), total=total_lines, desc="Processing segments"):
                 line = row.geometry
                 if not isinstance(line, (LineString, MultiLineString)):
                     geometry_type = line.geom_type
@@ -517,7 +531,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                     line, raster, nodata_value=nodata_value
                 )
 
-                logging.debug(f"Line {idx}: Sampled {len(valid_distances)} distances and {len(valid_points)} valid points.")
+                logging.info(f"Line {idx}: Sampled {len(valid_distances)} distances and {len(valid_points)} valid points.")
 
                 if len(valid_distances) == 0 or len(valid_points) == 0:
                     logging.warning(f"Skipping line {idx} due to all NoData values or no valid points.")
@@ -534,10 +548,10 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                 # Log elevations on each side
                 if len(left_side_indices) > 0:
                     left_elevations = np.array(valid_raster_values)[left_side_indices]
-                    logging.debug(f"Line {idx}: Left side elevations range from {left_elevations.min()}m to {left_elevations.max()}m.")
+                    logging.info(f"Line {idx}: Left side elevations range from {left_elevations.min()}m to {left_elevations.max()}m.")
                 if len(right_side_indices) > 0:
                     right_elevations = np.array(valid_raster_values)[right_side_indices]
-                    logging.debug(f"Line {idx}: Right side elevations range from {right_elevations.min()}m to {right_elevations.max()}m.")
+                    logging.info(f"Line {idx}: Right side elevations range from {right_elevations.min()}m to {right_elevations.max()}m.")
 
                 # Check if at least one side is present
                 if len(left_side_indices) > 0 or len(right_side_indices) > 0:
@@ -554,22 +568,9 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                         leveling_out_elevation=None,  # Will be determined within the function based on damping
                         window_size=window_size,
                         poly_order=poly_order,
-                        desired_inflection=desired_inflection,  # This parameter is now redundant but kept for compatibility
                         rolling_window_size=rolling_window_size,
                         min_consecutive_decreases=min_consecutive_decreases
                     )
-
-                    # Save hydraulic radius vs depth points to a CSV file
-                    if depth is not None and ratio is not None:
-                        df = pd.DataFrame({'Depth_m': depth, 'Hydraulic_Radius': ratio})
-                        csv_path = os.path.join(output_folder, f'hydraulic_radius_depth_line_{idx}.csv')
-                        try:
-                            df.to_csv(csv_path, index=False)
-                            logging.info(f"Saved hydraulic radius vs depth data for line {idx} at {csv_path}")
-                        except Exception as e:
-                            logging.error(f"Failed to save CSV for line {idx} at {csv_path}: {e}")
-                    else:
-                        logging.warning(f"Depth and ratio data not available for line index {idx}. Skipping CSV save.")
 
                     # Use the leveling_out_elevation from the plot function (which is damping_onset_depth)
                     if leveling_out_elevation is None:
@@ -583,6 +584,9 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                     # Update the prior_leveling_out_elevation for the next iteration
                     prior_leveling_out_elevation = leveling_out_elevation
 
+                    # Store the flow depth for this segment
+                    flow_depths[str(idx)] = leveling_out_elevation
+
                     # Find the point closest to the leveling_out_elevation on each side
                     closest_left_point = None
                     closest_right_point = None
@@ -593,7 +597,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                         closest_left_relative_idx = np.argmin(np.abs(left_side_elevations - leveling_out_elevation))
                         closest_left_idx = left_side_indices[closest_left_relative_idx]
                         closest_left_point = valid_points[closest_left_idx]
-                        logging.debug(f"Line {idx}: Closest left point elevation {left_side_elevations[closest_left_relative_idx]:.2f}m at index {closest_left_idx}")
+                        logging.info(f"Line {idx}: Closest left point elevation {left_side_elevations[closest_left_relative_idx]:.2f}m at index {closest_left_idx}")
 
                     if len(right_side_indices) > 0:
                         right_side_elevations = np.array(valid_raster_values)[right_side_indices]
@@ -601,7 +605,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                         closest_right_relative_idx = np.argmin(np.abs(right_side_elevations - leveling_out_elevation))
                         closest_right_idx = right_side_indices[closest_right_relative_idx]
                         closest_right_point = valid_points[closest_right_idx]
-                        logging.debug(f"Line {idx}: Closest right point elevation {right_side_elevations[closest_right_relative_idx]:.2f}m at index {closest_right_idx}")
+                        logging.info(f"Line {idx}: Closest right point elevation {right_side_elevations[closest_right_relative_idx]:.2f}m at index {closest_right_idx}")
 
                     # Append points if both sides are present
                     if closest_left_point and closest_right_point:
@@ -640,6 +644,15 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
         logging.error(f"Failed to open or process raster at {raster_path}: {e}")
         return
 
+    # Save flow depths to a json file
+    json_path = os.path.join(output_folder, 'flow_depths.json')
+    try:
+        with open(json_path, 'w') as f:
+            json.dump(flow_depths, f)
+        logging.info(f"Saved flow depths to {json_path}")
+    except Exception as e:
+        logging.error(f"Failed to save flow depths to json file: {e}")
+
     # Create polygon from left and right points
     if left_points and right_points:
         try:
@@ -648,7 +661,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
             left_points_trimmed = left_points[:min_length]
             right_points_trimmed = right_points[:min_length]
 
-            logging.debug(f"Creating polygon with {min_length} points on each side.")
+            logging.info(f"Creating polygon with {min_length} points on each side.")
 
             # Combine left and right points to form a closed polygon
             polygon_coords = left_points_trimmed + right_points_trimmed[::-1] + [left_points_trimmed[0]]
@@ -667,32 +680,41 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 # ----------------------------- Execution Entry Point ---------------------------- #
 
 if __name__ == "__main__":
-    # Define input paths (Hardcoded as per user request)
+    from datetime import datetime
+    ######################################################################################################################
+    ########################################### User-Defined Parameters ##################################################
+    ######################################################################################################################
     perpendiculars_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_perpendiculars_1000m.gpkg"
     raster_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Terrain\WBT_Outputs\filled_dem.tif"
+    ###############IMPORTANT################
+    # The centerline path must be a multiline string with collected geometries (e.g. only a single line)
     centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_collected.gpkg"
-
-    # Define depth increment
-    depth_increment = 0.01  # Depth increment in meters
-
-    # Define output paths
+    
     output_folder = os.path.join(
         r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\ATD_Streams", 
-        f"Results_{depth_increment}_rolling_variance_detection_100m"
+        f"Results_rolling_variance_detection_1000m_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm')}"
     )
-    os.makedirs(output_folder, exist_ok=True)
-    
-    output_gpkg_name = f"Valley_Footprint_di.gpkg"
-    output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
-
+    # Define depth increment
+    depth_increment = 0.01  # Depth increment in meters
     # Define smoothing parameters and desired inflection point
     window_size = 11  # Must be odd and > poly_order
     poly_order = 2    # Polynomial order for Savitzky-Golay filter
-    desired_inflection = 1  # 1 for first inflection point, 2 for second, etc.
 
     # Define rolling variance parameters
-    rolling_window_size = 50  # Number of points in rolling window
-    min_consecutive_decreases = 5  # Minimum consecutive decreases to confirm damping
+    rolling_window_size = 100  # Number of points in rolling window
+    min_consecutive_decreases = 7  # Minimum consecutive decreases to confirm damping
+    
+    ######################################################################################################################
+    ############################################## Main Function Call ####################################################
+    ################################################################################################################
+
+    # Define output paths
+
+    os.makedirs(output_folder, exist_ok=True)
+    
+    output_gpkg_name = f"Valley_Footprint.gpkg"
+    output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
+
 
     # Execute main function
     main(
@@ -705,7 +727,6 @@ if __name__ == "__main__":
         print_output=True,
         window_size=window_size,
         poly_order=poly_order,
-        desired_inflection=desired_inflection,  # This parameter is now redundant but kept for compatibility
         rolling_window_size=rolling_window_size,
         min_consecutive_decreases=min_consecutive_decreases
     )
