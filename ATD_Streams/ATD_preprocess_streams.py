@@ -1,13 +1,17 @@
 from smooth_stream import interpolate_geopackage
 from get_perpendiculars import create_smooth_perpendicular_lines
+import os
 
 # Define parameters
-input_valley_centerline = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Valley_CL.gpkg"
-output_smoothed_valley = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Valley_CL_smooth.gpkg"
-output_perpendiculars = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Perpendiculars_10m.gpkg"
+input_valley_centerline = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL.gpkg"
+output_directory = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs"
+
 smoothing_interval = 100  # in CRS units
-max_valley_width = 150  # in CRS units
-segment_spacing = 10  # in CRS units
+max_valley_width = 100  # in CRS units
+segment_spacing = 4000  # in CRS units
+
+output_smoothed_valley = os.path.join(output_directory, "Valley_CL_smooth.gpkg")
+output_perpendiculars = os.path.join(output_directory, f"Valley_CL_perpendiculars_{segment_spacing}m.gpkg")
 
 # Call the function
 interpolate_geopackage(

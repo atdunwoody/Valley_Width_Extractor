@@ -206,11 +206,11 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 
 
 if __name__ == "__main__":
-    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars\perpendiculars_ME_clipped_sparse.gpkg"
-    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021_ME_clip_filtered_chan_fill.tif"
-    centerline_gpkg = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\ME_Centerlines_EPSG26913_single.gpkg"
+    perpendiculars_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Perpendiculars_10m.gpkg"
+    raster_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Terrain\Individual\2020_LIDAR_Katies_polys_CO2.tif"
+    centerline_gpkg = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Valley_CL.gpkg"
     
-    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\ATD_algorithm\Valley_filt_2dir"
+    output_folder = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\ATD_Streams"
     output_gpkg_name = r"Valley_Footprint.gpkg"
     output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
     

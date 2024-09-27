@@ -132,7 +132,9 @@ def interpolate_geopackage(
     try:
         # Check if output GeoPackage already exists
         if fiona.supported_drivers.get("GPKG"):
-            smoothed_gdf.to_file(output_gpkg, layer=layer_name, driver="GPKG", mode='w')
+            import os
+            os.makedirs(os.path.dirname(output_gpkg), exist_ok=True)
+            smoothed_gdf.to_file(output_gpkg, driver="GPKG")
         else:
             print("GeoPackage driver not supported.")
             sys.exit(1)

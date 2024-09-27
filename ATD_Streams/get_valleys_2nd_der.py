@@ -132,7 +132,7 @@ def find_leveling_point_fixed(x, y, depth_increment=0.1, polynomial_order=4,
     # plt.show()
     return leveling_out_elevation
 
-def find_leveling_point_depth(x, y, depth_increment=0.01, polynomial_order=4, smooth=True, 
+def find_leveling_point_depth(x, y, depth_increment=0.05, polynomial_order=4, smooth=True, 
                         window_length=11, polyorder=3, percentile = 20):
     depth = np.arange(min(y), max(y), depth_increment)
     ratio = []
@@ -187,7 +187,7 @@ def find_leveling_point_depth(x, y, depth_increment=0.01, polynomial_order=4, sm
     return leveling_out_elevation
 
 
-def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.01, fig_output_path='', 
+def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.1, fig_output_path='', 
                                                       polynomial_order=4, smooth=False, window_length=5, polyorder=4, 
                                                       print_output=True, second_derivative_num = None, percentile = None):
     
@@ -319,10 +319,17 @@ Uncomment to run a Monte Carlo on a single watershed with depth percentile metho
 """
     
 if __name__ == "__main__":
-    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Test_CL_perpendiculars_50m.gpkg"
-    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\Watershed_Clipped\MM_clipped.tif"
-    centerline_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines\MM_clipped.gpkg"
-    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Testing\Depth0.01"
+    perpendiculars_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_perpendiculars_4000m.gpkg"
+    raster_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Terrain\WBT_Outputs\filled_dem.tif"
+    centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL.gpkg"
+    
+        # Define output paths
+    from datetime import datetime
+    output_folder = os.path.join(
+        r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\ATD_Streams", 
+        f"Results_get_valleys_2nd_der_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    )
+    os.makedirs(output_folder, exist_ok=True)
         
     output_gpkg_name = f"Valley_Footprint_6th_Per_0.01depth.gpkg"
     output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
