@@ -28,7 +28,7 @@ def clip_gpkg_by_name(clipping_gpkg_path, input_gpkg_path, output_folder):
 
 # Example usage
 clipping_gpkg_path = r"Y:\ATD\GIS\Bennett\Bennett_watersheds.gpkg"
-input_gpkg_path = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerlines_EPSG26913_single.gpkg"
-output_folder = r"Y:\ATD\GIS\Bennett\Channel Polygons\Centerlines_LSDTopo\Centerlines"
+input_gpkg_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\WBT_Outputs\streams.gpkg"
+output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines"
 
 clip_gpkg_by_name(clipping_gpkg_path, input_gpkg_path, output_folder)

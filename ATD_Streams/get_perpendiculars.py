@@ -85,8 +85,8 @@ def main():
     Uncomment below to get perpendiculars for a single centerline
     """
     centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Valley_CL_smooth.gpkg"
-    output_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Perpendiculars_10m.gpkg"
-    perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length = 200, spacing=10, window=200, output_path=output_path)
+    output_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Stream\Perpendiculars_100m.gpkg"
+    perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length = 200, spacing=100, window=200, output_path=output_path)
     perp_lines.to_file(output_path, driver='GPKG')
     
 if __name__ == '__main__':

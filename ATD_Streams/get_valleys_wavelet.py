@@ -8,8 +8,10 @@ import logging
 from datetime import datetime
 import sys
 import pandas as pd
-from scipy.signal import savgol_filter  # Removed find_peaks as it's no longer needed
-import json  # Added to handle JSON operations
+from scipy.signal import savgol_filter
+import json
+from tqdm import tqdm
+import pywt  # Added for wavelet decomposition
 
 # ----------------------------- Sampling Function ----------------------------- #
 
@@ -154,7 +156,8 @@ def determine_side_of_centerline(points, centerline):
         sides (np.array): Array indicating side (-1: left, 1: right, 0: on centerline).
     """
     if isinstance(centerline, MultiLineString):
-        centerline = LineString([pt for line in centerline for pt in line.coords])
+        # Use the 'geoms' property to access individual LineStrings
+        centerline = LineString([pt for line in centerline.geoms for pt in line.coords])
     elif not isinstance(centerline, LineString):
         raise TypeError("centerline must be a LineString or MultiLineString")
 
@@ -189,92 +192,66 @@ def determine_side_of_centerline(points, centerline):
 
     return sides
 
+# ------------------------- Damping Onset Function via Wavelet Decomposition ----------------------------- #
 
-# ------------------------- Leveling Point Functions ----------------------------- #
-
-def find_inflection_points(data, window_size=10):
+def find_damping_onset_by_wavelet(depth, second_derivative, wavelet_threshold=0.1, minimum_depth=1):
     """
-    Find all inflection points in the data based on the smoothed data.
-
-    Parameters:
-        data (np.array): Input data array (smoothed).
-        window_size (int): Window size used in smoothing (for indexing adjustment).
-
-    Returns:
-        list: Indices of inflection points.
-    """
-
-    first_derivative = np.gradient(data)
-    second_derivative = np.gradient(first_derivative)
-
-
-    sign_changes = np.where(np.diff(np.sign(second_derivative)) != 0)[0]
-
-    inflection_indices = sign_changes + window_size // 2  # Adjust index if necessary
-    inflection_indices = inflection_indices.tolist()
-
-    logging.info(f"Inflection points found at indices: {inflection_indices}")
-    return inflection_indices
-
-# ------------------------- Damping Onset Function ----------------------------- #
-
-def find_damping_onset_by_rolling_variance(depth, second_derivative, window_size=50, min_consecutive=5):
-    """
-    Identify the depth where the oscillations in the second derivative begin to dampen using rolling variance.
+    Identify the depth where the oscillations in the second derivative begin to dampen using Morlet wavelet decomposition,
+    while ignoring depths within a specified minimum depth threshold.
 
     Parameters:
         depth (np.array): Array of depth values.
         second_derivative (np.array): Array of second derivative values.
-        window_size (int): Window size for rolling variance.
-        min_consecutive (int): Minimum number of consecutive decreases to confirm damping.
+        wavelet_threshold (float): Threshold for wavelet energy to identify damping onset.
+        minimum_depth (float): Minimum depth threshold to ignore damping onset before this depth.
 
     Returns:
-        damping_depth (float or None): Depth where damping starts.
+        damping_depth (float or None): Depth where damping starts, after minimum depth threshold.
     """
+    # Ensure inputs are numpy arrays
+    depth = np.array(depth)
+    second_derivative = np.array(second_derivative)
 
-    # Convert to pandas Series for rolling operations
-    sd_series = pd.Series(second_derivative)
-    
-    # Calculate rolling variance
-    rolling_var = sd_series.rolling(window=window_size, min_periods=1).var()
-    logging.info(f"Rolling variance computed with window size {window_size}.")
+    # Perform Continuous Wavelet Transform using Morlet wavelet
+    widths = np.arange(1, 31)
+    cwtmatr, freqs = pywt.cwt(second_derivative, widths, 'morl')  # Changed 'mexh' to 'morl'
 
-    # Calculate the first derivative of the rolling variance
-    rolling_var_diff = rolling_var.diff()
+    # Compute the energy (squared coefficients) across scales
+    energy = np.sum(np.abs(cwtmatr) ** 2, axis=0)  # Use absolute values for complex coefficients
 
-    # Identify where the rolling variance starts decreasing
-    damping_candidates = np.where(rolling_var_diff < 0)[0]
-    logging.info(f"Number of damping candidates (where rolling variance decreases): {len(damping_candidates)}.")
+    # Normalize the energy
+    energy = energy / np.max(energy)
 
-    if len(damping_candidates) == 0:
-        logging.warning("No decreasing trend found in rolling variance for damping onset detection.")
+    # Find where energy starts to decrease significantly
+    threshold = wavelet_threshold * np.max(energy)
+
+    # Only consider depths greater than or equal to minimum depth threshold
+    min_depth_value = depth[0] + minimum_depth
+    below_threshold_indices = np.where((energy < threshold) & (depth >= min_depth_value))[0]
+
+    if len(below_threshold_indices) == 0:
+        logging.warning("Damping onset not detected: energy does not drop below threshold after minimum depth threshold.")
         return None
 
-    # Find the first index where at least 'min_consecutive' consecutive decreases occur
-    consec = 0
-    for i in range(1, len(rolling_var_diff)):
-        if rolling_var_diff[i] < 0:
-            consec += 1
-            if consec >= min_consecutive:
-                damping_onset_depth = depth[i]
-                logging.info(f"Damping onset detected at depth {damping_onset_depth:.2f}m based on rolling variance analysis.")
-                return damping_onset_depth
-        else:
-            consec = 0
+    # The first index where energy drops below the threshold after minimum depth threshold
+    damping_index = below_threshold_indices[0]
+    damping_onset_depth = depth[damping_index]
 
-    logging.warning("Damping onset not detected: insufficient consecutive decreases in rolling variance.")
-    return None
+    logging.info(f"Damping onset detected at depth {damping_onset_depth:.2f}m based on Morlet wavelet decomposition.")
+
+    return damping_onset_depth
+
+
 
 # --------------------------- Plotting Function ---------------------------------- #
 
 def plot_cross_section_area_to_wetted_perimeter_ratio(
     x, y, idx='', depth_increment=0.1, fig_output_path='', 
-    print_output=True, leveling_out_elevation=None, window_size=11, poly_order=2,
-    rolling_window_size=50, min_consecutive_decreases=5
-):
+    print_output=True, leveling_out_elevation=None, window_size=11, 
+    poly_order=2, wavelet_threshold=0.1, minimum_depth = 1):
     """
     Plot hydraulic radius vs. depth and overlay the smoothed data with its derivatives.
-    Additionally, plot the first and second derivatives of the smoothed data and the rolling variance.
+    Additionally, plot the first and second derivatives of the smoothed data and the wavelet energy.
 
     Parameters:
         x (list): Distances along the line.
@@ -286,8 +263,6 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
         leveling_out_elevation (float): Depth at which leveling-out occurs.
         window_size (int): Window size for the smoothing filter.
         poly_order (int): Polynomial order for the smoothing filter.
-        rolling_window_size (int): Window size for rolling variance.
-        min_consecutive (int): Minimum consecutive decreases to confirm damping.
 
     Returns:
         depth (np.array): Depth values.
@@ -323,12 +298,10 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
     first_derivative = np.gradient(smoothed_ratio)
     second_derivative = np.gradient(first_derivative)
 
-    # Find damping onset depth based on rolling variance analysis
-    damping_onset_depth = find_damping_onset_by_rolling_variance(
-        depth, second_derivative, 
-        window_size=rolling_window_size, 
-        min_consecutive=min_consecutive_decreases
-    )
+    # Find damping onset depth based on wavelet decomposition
+    damping_onset_depth = find_damping_onset_by_wavelet(depth, second_derivative, 
+                                                        wavelet_threshold=wavelet_threshold,
+                                                        minimum_depth=minimum_depth)
 
     # Set leveling_out_elevation based on damping_onset_depth
     leveling_out_elevation = damping_onset_depth
@@ -382,24 +355,27 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
         axs[2].set_title(f'Second Derivative of Smoothed Ratio vs. Depth (Index: {idx})')
         axs[2].grid(True)
 
-        # ----------------- Subplot 4: Rolling Variance of Second Derivative ----------------- #
-        # Compute rolling variance
-        sd_series = pd.Series(second_derivative)
-        rolling_var = sd_series.rolling(window=rolling_window_size, min_periods=1).var()
-        axs[3].plot(depth, rolling_var, linestyle='-', color='magenta', label=f'Rolling Variance (window_size={rolling_window_size})')
+        # ----------------- Subplot 4: Wavelet Energy ----------------- #
+        # Perform wavelet decomposition to compute energy
+        widths = np.arange(1, 31)
+        cwtmatr, freqs = pywt.cwt(second_derivative, widths, 'mexh')
+        energy = np.sum(cwtmatr ** 2, axis=0)
+        normalized_energy = energy / np.max(energy)
+        axs[3].plot(depth, normalized_energy, linestyle='-', color='magenta', label='Wavelet Energy')
         
         if damping_onset_depth is not None:
             axs[3].axvline(x=damping_onset_depth, color='orange', linestyle='--', label='Damping Onset Depth')
             axs[3].legend()
 
         axs[3].set_xlabel('Depth (m)')
-        axs[3].set_ylabel('Rolling Variance')
-        axs[3].set_title(f'Rolling Variance of Second Derivative vs. Depth (Index: {idx})')
+        axs[3].set_ylabel('Normalized Energy')
+        axs[3].set_title(f'Wavelet Energy vs. Depth (Index: {idx})')
         axs[3].grid(True)
 
         # Save the figure
         if fig_output_path:
             fig_save_path1 = os.path.join(fig_output_path, "Plots", f'{idx}_hydraulic_radius_vs_depth.png')
+            os.makedirs(os.path.dirname(fig_save_path1), exist_ok=True)
             fig.savefig(fig_save_path1)
             plt.close(fig)
 
@@ -408,11 +384,10 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
 # ------------------------------ Main Function ----------------------------------- #
 
 def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerline_gpkg=None, 
-         depth_increment=0.1, print_output=True, window_size=11, poly_order=2, 
-         rolling_window_size=50, min_consecutive_decreases=5):
+         depth_increment=0.1, print_output=True, window_size=11, poly_order=2, wavelet_threshold=0.1, minimum_depth=1):
     """
     Main function to process GeoPackage lines, compute hydraulic radii, determine leveling-out elevations,
-    identify damping onset via rolling variance analysis, and generate plots and output GeoPackage.
+    identify damping onset via wavelet decomposition, and generate plots and output GeoPackage.
 
     Parameters:
         gpkg_path (str): Path to the input GeoPackage containing perpendicular lines.
@@ -424,17 +399,31 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
         print_output (bool): Whether to generate and save plots.
         window_size (int): Window size for the Savitzky-Golay smoothing filter (must be odd and > poly_order).
         poly_order (int): Polynomial order for the Savitzky-Golay smoothing filter.
-        rolling_window_size (int): Window size for rolling variance analysis.
-        min_consecutive_decreases (int): Minimum consecutive decreases in rolling variance to confirm damping.
     """
     # Setup logging
     log_file = os.path.join(output_folder, f'processing_log_{datetime.now().strftime("%Y%m%d_%H%M%S")}.log')
-    logging.basicConfig(level=logging.INFO,  # Set to DEBUG for detailed logs
-                        format='%(asctime)s %(levelname)s: %(message)s',
-                        handlers=[
-                            logging.FileHandler(log_file),
-                            logging.StreamHandler()
-                        ])
+
+    # Create logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Remove all handlers associated with the root logger object (if any)
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+
+    # Create file handler for logging INFO and above
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+
+    # Create console handler for logging WARNING and above
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.WARNING)
+    console_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+
+    # Add handlers to logger
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
     # Log the path of the executed script
     script_path = os.path.abspath(sys.argv[0])
@@ -451,8 +440,8 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
     logging.info(f"  print_output: {print_output}")
     logging.info(f"  window_size: {window_size}")
     logging.info(f"  poly_order: {poly_order}")
-    logging.info(f"  rolling_window_size: {rolling_window_size}")
-    logging.info(f"  min_consecutive_decreases: {min_consecutive_decreases}")
+    logging.info(f"  wavelet_threshold: {wavelet_threshold}")
+    logging.info(f"  minimum_depth: {minimum_depth}")
 
     # Read input GeoPackages
     try:
@@ -499,7 +488,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
             prior_leveling_out_elevation = None
 
             # Iterate through each line using a for loop to maintain state
-            for idx, row in gdf.iterrows():
+            for idx, row in tqdm(gdf.iterrows(), total=total_lines, desc="Processing segments"):
                 line = row.geometry
                 if not isinstance(line, (LineString, MultiLineString)):
                     geometry_type = line.geom_type
@@ -550,8 +539,8 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                         leveling_out_elevation=None,  # Will be determined within the function based on damping
                         window_size=window_size,
                         poly_order=poly_order,
-                        rolling_window_size=rolling_window_size,
-                        min_consecutive_decreases=min_consecutive_decreases
+                        wavelet_threshold=wavelet_threshold,
+                        minimum_depth=minimum_depth
                     )
 
                     # Use the leveling_out_elevation from the plot function (which is damping_onset_depth)
@@ -658,47 +647,45 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
         logging.warning("No left and/or right points were collected. Polygon GeoPackage was not created.")
 
     logging.info("Script finished.")
-
+    return json_path
 # ----------------------------- Execution Entry Point ---------------------------- #
 
 if __name__ == "__main__":
+    from datetime import datetime
     ######################################################################################################################
     ########################################### User-Defined Parameters ##################################################
     ######################################################################################################################
-    perpendiculars_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Perpendiculars_10m.gpkg"
-    raster_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Terrain\WBT_Outputs\filled_dem.tif"
+    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UE_clipped_perps_5m_hillslopes.gpkg"
+    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021.tif"
     ###############IMPORTANT################
     # The centerline path must be a multiline string with collected geometries (e.g. only a single line)
-    centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_collected.gpkg"
+    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UE_clipped.gpkg"
+    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelet Testing"
 
     # Define depth increment
     depth_increment = 0.01  # Depth increment in meters
-    # Define smoothing parameters and desired inflection point
+    # Define smoothing parameters
     window_size = 11  # Must be odd and > poly_order
-    poly_order = 2    # Polynomial order for Savitzky-Golay filter
-
-    # Define rolling variance parameters
-    rolling_window_size = 100  # Number of points in rolling window
-    min_consecutive_decreases = 7  # Minimum consecutive decreases to confirm damping
-    
+    poly_order = 9    # Polynomial order for Savitzky-Golay filter
+    wavlet_threshold = 0.1
+    minimum_depth = 1.5  # Minimum depth threshold to ignore damping onset before this depth
     ######################################################################################################################
     ############################################## Main Function Call ####################################################
     ################################################################################################################
-    
+
     # Define output paths
-    from datetime import datetime
     output_folder = os.path.join(
-        r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\ATD_Streams", 
-        f"Results_rolling_variance_detection_10m_{datetime.now().strftime('%Y-%m-%d_%Hh%Mm')}"
+        output_dir, 
+        f"{datetime.now().strftime('%Y-%m-%d_%Hh%Mm')}_10m_{wavlet_threshold}_thresh_{window_size}_win_{poly_order}_poly"
     )
     os.makedirs(output_folder, exist_ok=True)
     
-    output_gpkg_name = f"Valley_Footprint.gpkg"
+    output_gpkg_name = f"Valley_Footprint_{wavlet_threshold}_thresh.gpkg"
     output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
 
-
+    start_time = datetime.now()
     # Execute main function
-    main(
+    json_path = main(
         gpkg_path=perpendiculars_path,
         raster_path=raster_path,
         output_folder=output_folder,
@@ -708,6 +695,10 @@ if __name__ == "__main__":
         print_output=True,
         window_size=window_size,
         poly_order=poly_order,
-        rolling_window_size=rolling_window_size,
-        min_consecutive_decreases=min_consecutive_decreases
+        wavelet_threshold=wavlet_threshold,
+        minimum_depth=minimum_depth
     )
+    print(f"Execution time: {datetime.now() - start_time}")
+    from call_plot_cross_sections import run_cross_section_plotting
+    run_cross_section_plotting(perpendiculars_path=perpendiculars_path, dem_raster=raster_path, json_file=json_path)
+

@@ -86,52 +86,6 @@ def smooth_ratio(ratio, window_length=11, polyorder=3):
     return savgol_filter(ratio, window_length, polyorder)
 
 
-def find_leveling_point_fixed(x, y, depth_increment=0.1, polynomial_order=4, 
-                             smooth=True, window_length=11, polyorder=2, second_derivative_num = 50):
-    depth = np.arange(min(y), max(y), depth_increment)
-    ratio = []
-    
-    for d in depth:
-        area = compute_cross_sectional_area_trapezoidal(x, y, d)
-        perimeter = compute_wetted_perimeter(x, y, d)
-        if perimeter > 0:
-            ratio.append(area / (perimeter))
-        else:
-            ratio.append(0)
-    
-    ratio = np.array(ratio)
-    
-    if smooth:
-        ratio = smooth_ratio(ratio, window_length, polyorder)
-    
-    poly_coeffs = np.polyfit(depth, ratio, polynomial_order)
-    poly_fit = np.polyval(poly_coeffs, depth)
-    
-    # First derivative
-    first_derivative = np.gradient(poly_fit, depth)
-    
-    # Second derivative (to find inflection points)
-    second_derivative = np.gradient(first_derivative, depth)
-    
-    # Identify potential leveling out point where the second derivative approaches zero
-    inflection_indices = np.where(np.abs(second_derivative) < 1)[0]
-    
-    if len(inflection_indices) > second_derivative_num:
-        #find index in the middle of the inflection points
-        leveling_out_elevation = depth[inflection_indices[second_derivative_num]]
-        print(f"Length of inflection_indices: {len(inflection_indices)}")
-    elif len(inflection_indices) < second_derivative_num and len(inflection_indices) > 0:
-        leveling_out_elevation = depth[inflection_indices[len(inflection_indices)//10]]
-    else:
-        leveling_out_elevation = None
-    #plot first 100 inflection points against elevation as scatter plot
-    # plt.scatter(depth[inflection_indices[:100]], second_derivative[inflection_indices[:100]])
-    # plt.xlabel('Elevation')
-    # plt.ylabel('Second Derivative')
-    # plt.title('Second Derivative vs Elevation')
-    # plt.show()
-    return leveling_out_elevation
-
 def find_leveling_point_depth(x, y, depth_increment=0.05, polynomial_order=4, smooth=True, 
                         window_length=11, polyorder=3, percentile = 20):
     depth = np.arange(min(y), max(y), depth_increment)

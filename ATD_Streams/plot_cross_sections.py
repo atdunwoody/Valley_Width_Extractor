@@ -112,6 +112,15 @@ def main(lines_gpkg_path, raster_path, json_path, output_folder):
             flow_depth = float(flow_depths[segment_index])
             # Draw horizontal red line at elevation of flow depth
             plt.axhline(y=flow_depth, color='red', linestyle='--', label='Flow Depth')
+
+            # Compute the difference between flow depth and minimum elevation
+            min_elevation = np.min(elevations)
+            depth_minus_min_elevation = flow_depth - min_elevation
+
+            # Add text to the plot
+            plt.text(0.05, 0.95, f'Depth: {depth_minus_min_elevation:.2f} m',
+                     transform=plt.gca().transAxes, verticalalignment='top',
+                     bbox=dict(facecolor='white', alpha=0.5))
         else:
             # No flow depth for this segment
             logging.info(f"No flow depth for segment {segment_index}")
@@ -122,7 +131,7 @@ def main(lines_gpkg_path, raster_path, json_path, output_folder):
         plt.title(f'Terrain Cross-Section at Line {idx}')
         plt.legend()
         # Save the plot
-        plot_filename = os.path.join(output_folder, f'cross_section_{idx}.png')
+        plot_filename = os.path.join(output_folder, f'{idx}_cross_section.png')
         plt.savefig(plot_filename)
         plt.close()
         logging.info(f"Saved plot for line {idx} to {plot_filename}")
