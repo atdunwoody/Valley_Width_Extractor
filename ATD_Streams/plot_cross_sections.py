@@ -130,7 +130,12 @@ def main(lines_gpkg_path, raster_path, json_path, output_folder):
         plt.ylabel('Elevation (m)')
         plt.title(f'Terrain Cross-Section at Line {idx}')
         plt.legend()
-        # Save the plot
+        #place legend in lower left corner
+        plt.legend(loc='lower left')
+        #place text in upper right corner
+        plt.text(0.95, 0.95, f'Elevation: {flow_depth:.2f}m', transform=plt.gca().transAxes, verticalalignment='top', horizontalalignment='right',
+                 bbox=dict(facecolor='white', alpha=0.5))
+        
         plot_filename = os.path.join(output_folder, f'{idx}_cross_section.png')
         plt.savefig(plot_filename)
         plt.close()

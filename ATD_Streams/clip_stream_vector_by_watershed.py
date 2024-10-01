@@ -1,10 +1,11 @@
 import geopandas as gpd
 import os
+import fiona
 
-def clip_gpkg_by_name(clipping_gpkg_path, input_gpkg_path, output_folder):
+def clip_gpkg_by_layers(clipping_gpkg_path, input_gpkg_path, output_folder):
     """
-    Clips the input GeoPackage by each unique "Name" in the clipping GeoPackage.
-    All geometries for each "Name" are collected and converted to single-part geometries before clipping.
+    Clips each layer in the input GeoPackage using the geometries from the clipping GeoPackage.
+    Each clipped layer is saved as a separate GeoPackage in the specified output folder.
 
     Parameters:
     - clipping_gpkg_path (str): Path to the clipping GeoPackage.
@@ -12,55 +13,63 @@ def clip_gpkg_by_name(clipping_gpkg_path, input_gpkg_path, output_folder):
     - output_folder (str): Directory where the clipped GeoPackages will be saved.
     """
     
-    # Load the clipping GeoPackage and input GeoPackage
-    clipping_gdf = gpd.read_file(clipping_gpkg_path)
+    # Load the clipping GeoPackage (assuming a single layer)
     input_gdf = gpd.read_file(input_gpkg_path)
     
-    # Ensure both GeoDataFrames use the same Coordinate Reference System (CRS)
-    if clipping_gdf.crs != input_gdf.crs:
-        print("CRS mismatch between clipping and input GeoPackages. Reprojecting input to match clipping CRS.")
-        input_gdf = input_gdf.to_crs(clipping_gdf.crs)
+    # List all layers in the input GeoPackage
+    try:
+        input_layers = fiona.listlayers(clipping_gpkg_path)
+    except Exception as e:
+        print(f"Error reading input GeoPackage layers: {e}")
+        return
     
     # Ensure the output folder exists
     os.makedirs(output_folder, exist_ok=True)
     
-    # Loop through each unique "Name" in the clipping GeoPackage
-    for name in clipping_gdf["Name"].unique():
-        # Filter the clipping GeoDataFrame by the current "Name"
-        clip_gdf = clipping_gdf[clipping_gdf["Name"] == name]
+    # Iterate through each layer in the input GeoPackage
+    print(f"Layers in the input GeoPackage: {input_layers}")
+    for layer in input_layers:
+        print(f"Processing layer: {layer}")
         
-        # Collect all geometries for this "Name" and convert to single-part geometries
-        # This handles any multipart geometries by exploding them into single parts
-        # clip_gdf_single = clip_gdf.explode(index_parts=False).reset_index(drop=True)
+        try:
+            # Read the current layer from the input GeoPackage
+            clipping_gdf = gpd.read_file(clipping_gpkg_path, layer=layer)
+        except Exception as e:
+            print(f"  Error reading layer '{layer}': {e}. Skipping this layer.")
+            continue
         
-        # # Optional: Dissolve all single-part geometries into a single geometry if desired
-        # # This merges all parts into one geometry, which can be useful for certain clipping operations
-        # # clip_gdf_single = clip_gdf_single.dissolve()
+        # Check and align CRS
+        if clipping_gdf.crs != input_gdf.crs:
+            print(f"  CRS mismatch for layer '{layer}'. Reprojecting input layer to match clipping CRS.")
+            input_gdf = input_gdf.to_crs(clipping_gdf.crs)
         
-        # # Clip the input GeoDataFrame using the single-part clipping GeoDataFrame
-        # input_gdf_single = input_gdf.explode(index_parts=False).reset_index(drop=True)
-        # input_gdf_single = input_gdf_single.dissolve()  
-        clipped_gdf = gpd.clip(input_gdf, clip_gdf)
+        # Perform the clipping operation
+        try:
+            clipped_gdf = gpd.clip(input_gdf, clipping_gdf)
+        except Exception as e:
+            print(f"  Error clipping layer '{layer}': {e}. Skipping this layer.")
+            continue
         
         # Check if the clipping resulted in any geometries
         if clipped_gdf.empty:
-            print(f"No features clipped for Name: {name}. Skipping saving.")
+            print(f"  No features clipped for layer '{layer}'. Skipping saving.")
             continue
         
-        # Define the output path with "Name" as a prefix
-        # Replace or sanitize 'name' if it contains characters invalid for file names
-        sanitized_name = "".join([c if c.isalnum() or c in (' ', '_', '-') else "_" for c in name])
-        output_path = os.path.join(output_folder, f"{sanitized_name}_clipped.gpkg")
+        # Sanitize the layer name to create a valid filename
+        sanitized_layer = "".join([c if c.isalnum() or c in (' ', '_', '-') else "_" for c in layer])
+        output_path = os.path.join(output_folder, f"{sanitized_layer}_centerline.gpkg")
         
-        # Save the clipped GeoDataFrame to the output GeoPackage
-        clipped_gdf.to_file(output_path, driver="GPKG")
-        
-        print(f"Saved clipped GeoPackage for '{name}': {output_path}")
+        # Save the clipped GeoDataFrame to a new GeoPackage
+        try:
+            clipped_gdf.to_file(output_path, driver="GPKG", layer=layer)
+            print(f"  Saved clipped GeoPackage for layer '{layer}': {output_path}")
+        except Exception as e:
+            print(f"  Error saving clipped layer '{layer}': {e}.")
+            continue
 
 if __name__ == "__main__":
-    clipping_gpkg_path = r"Y:\ATD\GIS\Bennett\Bennett_watersheds.gpkg"
-    input_gpkg_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\Bennet_perps_5m.gpkg"
-    output_folder = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars\Clipped_by_Watershed"
-    os.makedirs(output_folder, exist_ok=True)
-
-    clip_gpkg_by_name(clipping_gpkg_path, input_gpkg_path, output_folder)
+    clipping_gpkg_path = r"Y:\ATD\GIS\ETF\Watershed_Boundaries.gpkg"
+    input_gpkg_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\streams_100k.gpkg"
+    output_folder = r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines"
+    
+    clip_gpkg_by_layers(clipping_gpkg_path, input_gpkg_path, output_folder)

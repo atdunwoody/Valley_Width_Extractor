@@ -198,7 +198,6 @@ def determine_side_of_centerline(points, centerline):
 
     return sides
 
-
 # ------------------------- Damping Onset Function via Wavelet Decomposition ----------------------------- #
 
 def find_damping_onset_by_wavelet(depth, second_derivative, wavelet_threshold=0.1, minimum_depth=1):
@@ -247,8 +246,6 @@ def find_damping_onset_by_wavelet(depth, second_derivative, wavelet_threshold=0.
     logging.info(f"Damping onset detected at depth {damping_onset_depth:.2f}m based on Morlet wavelet decomposition.")
 
     return damping_onset_depth
-
-
 
 # --------------------------- Plotting Function ---------------------------------- #
 
@@ -414,6 +411,7 @@ def get_valleys(perpendiculars_path, dem_path, output_folder, output_gpkg_path=N
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
+    copy_inputs_to_outputs_folder(perpendiculars_path, dem_path, centerline_gpkg, output_folder)
     # Remove all handlers associated with the root logger object (if any)
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
@@ -656,6 +654,32 @@ def get_valleys(perpendiculars_path, dem_path, output_folder, output_gpkg_path=N
     logging.info("Script finished.")
     return json_path
 # ----------------------------- Execution Entry Point ---------------------------- #
+
+def copy_inputs_to_outputs_folder(perpendiculars_path, dem_path, centerline_gpkg, output_folder):
+    """
+    Copy input files to the output folder for reference.
+
+    Parameters:
+        perpendiculars_path (str): Path to the input GeoPackage containing perpendicular lines.
+        dem_path (str): Path to the filled dem.
+        centerline_gpkg (str): Path to the GeoPackage containing the centerline.
+        output_folder (str): Directory to save outputs.
+    """
+    try:
+        # Copy input files to the output folder
+        output_perpendiculars_path = os.path.join(output_folder, "Inputs", os.path.basename(perpendiculars_path))
+        output_dem_path = os.path.join(output_folder, "Inputs", os.path.basename(dem_path))
+        output_centerline_gpkg = os.path.join(output_folder, "Inputs", os.path.basename(centerline_gpkg))
+        os.makedirs(os.path.dirname(output_perpendiculars_path), exist_ok=True)
+        # Copy files
+        for src, dest in zip([perpendiculars_path, dem_path, centerline_gpkg], 
+                             [output_perpendiculars_path, output_dem_path, output_centerline_gpkg]):
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            os.system(f'copy "{src}" "{dest}"')
+    except Exception as e:
+        logging.error(f"Failed to copy input files to output folder: {e}")
+
+    return output_perpendiculars_path, output_dem_path, output_centerline_gpkg
 
 if __name__ == "__main__":
     from datetime import datetime

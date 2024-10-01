@@ -6,10 +6,10 @@ wbt = whitebox.WhiteboxTools()
 
 # Set the environment and path to DEM
 wbe = WbEnvironment()
-dem = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021.tif"
+dem = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\ET_low_LIDAR_2020_1m_DEM.tin.tif"
 
 # Set up working directory, usually where your DEM file is located
-working_dir = os.path.join(os.path.dirname(dem), "WBT_Outputs_Troyubleshooting")
+working_dir = os.path.join(os.path.dirname(dem), "WBT_Outputs_Low")
 if not os.path.exists(working_dir):
     os.makedirs(working_dir)
 wbt.set_working_dir(working_dir)

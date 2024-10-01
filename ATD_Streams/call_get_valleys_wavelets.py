@@ -7,28 +7,20 @@ from clip_perpendiculars_by_hillslope import clip_perpendiculars_by_hillslope
 from smooth_valley_bottom_polygons import smooth_polygon
 
 perpendiculars_list = [
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\ME_clipped_perps_5m.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\MM_clipped_perps_5m.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\MW_clipped_perps_5m.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UE_clipped_perps_5m.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UM_clipped_perps_5m.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UW_clipped_perps_5m.gpkg",
+#r"Y:\ATD\GIS\ETF\Valley Geometry\Perpendiculars\LM2_perpendiculars_100m.gpkg",
+r"Y:\ATD\GIS\ETF\Valley Geometry\Perpendiculars\LPM_smooth_perpendiculars_20m.gpkg",
 ]
 
 centerlines_list = [
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\ME_clipped.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\MM_clipped.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\MW_clipped.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UE_clipped.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UM_clipped.gpkg",
-r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UW_clipped.gpkg",
+#r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\LM2_centerline.gpkg",
+r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\LPM_centerline.gpkg",
 ]
 
-dem_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\WBT\filled_dem.tif"
-hillslopes_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\WBT_Outputs\hillslopes_200k.gpkg"
+dem_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\filled_dem.tif"
+hillslopes_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\hillslopes_100k.gpkg"
 ###############IMPORTANT################
 # The centerline path must be a multiline string with collected geometries (e.g. only a single line)
-output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelets"
+output_dir = r"Y:\ATD\GIS\ETF\Valley Bottoms\ATD_Algorithm\Wavelets"
 
 # Define depth increment
 depth_increment = 0.01  # Depth increment in meters
@@ -37,11 +29,11 @@ window_size = 11  # Must be odd and > poly_order
 poly_order = 9    # Polynomial order for Savitzky-Golay filter
 wavelet_threshold = 0.1
 minimum_depth = 1  # Minimum depth threshold to ignore damping onset before this depth
-print_output = True
+print_output = False
 
 for centerline_path, perpendiculars_path in zip(centerlines_list, perpendiculars_list):
     # Define output folder
-    output_folder = os.path.join(output_dir, os.path.basename(centerline_path).replace("_clipped.gpkg", ""))
+    output_folder = os.path.join(output_dir, os.path.basename(centerline_path).replace("_centerline.gpkg", ""))
     output_folder = os.path.join(output_folder, datetime.now().strftime("%Y%m%d_%Hh%Mm"))
     output_gpkg_path = os.path.join(output_folder, os.path.basename(centerline_path).replace(".gpkg", "") + "_valleys_wavelets.gpkg")
     print(f"Output geopackage path: {output_gpkg_path}")
@@ -71,7 +63,7 @@ for centerline_path, perpendiculars_path in zip(centerlines_list, perpendiculars
         start_time = datetime.now()
         # Execute main function
         json_path = get_valleys(
-            perpendiculars_path=clipped_perpendiculars_path,
+            perpendiculars_path= clipped_perpendiculars_path,
             dem_path=dem_path,
             output_folder=output_folder,
             output_gpkg_path=output_gpkg_path, 
