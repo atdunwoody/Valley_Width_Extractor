@@ -1,5 +1,5 @@
 import os
-from ATD_Streams.get_valleys_rolling_variance import main
+from ATD_Streams.Archive.get_valleys_rolling_variance import main
 import logging
 from datetime import datetime
 

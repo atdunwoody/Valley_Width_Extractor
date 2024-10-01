@@ -3,12 +3,12 @@ from get_perpendiculars import create_smooth_perpendicular_lines
 import os
 
 # Define parameters
-input_valley_centerline = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL.gpkg"
-output_directory = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs"
+input_valley_centerline = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\ME_centerline.gpkg"
+output_directory = r"Y:\ATD\GIS\Bennett\Valley Widths\Perpendiculars\ATD_preprocess_streams"
 
-smoothing_interval = 100  # in CRS units
-max_valley_width = 100  # in CRS units
-segment_spacing = 4000  # in CRS units
+smoothing_interval = 10  # in CRS units
+max_valley_width = 75  # in CRS units
+segment_spacing = 100  # in CRS units
 
 output_smoothed_valley = os.path.join(output_directory, "Valley_CL_smooth.gpkg")
 output_perpendiculars = os.path.join(output_directory, f"Valley_CL_perpendiculars_{segment_spacing}m.gpkg")

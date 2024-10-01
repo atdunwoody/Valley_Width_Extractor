@@ -146,7 +146,7 @@ def compute_wetted_perimeter(x, y, depth):
 
 def determine_side_of_centerline(points, centerline):
     """
-    Determine the side of each point relative to the centerline.
+    Determine the side of each point relative to the centerline using the cross product method.
 
     Parameters:
         points (list): List of Shapely Point objects.
@@ -155,42 +155,49 @@ def determine_side_of_centerline(points, centerline):
     Returns:
         sides (np.array): Array indicating side (-1: left, 1: right, 0: on centerline).
     """
+    from shapely.ops import linemerge
+
     if isinstance(centerline, MultiLineString):
-        # Use the 'geoms' property to access individual LineStrings
-        centerline = LineString([pt for line in centerline.geoms for pt in line.coords])
+        centerline = linemerge(centerline)
     elif not isinstance(centerline, LineString):
         raise TypeError("centerline must be a LineString or MultiLineString")
 
-    center_length = centerline.length
+    # Extract point coordinates
+    px = np.array([point.x for point in points])
+    py = np.array([point.y for point in points])
+
+    # Get centerline coordinates
+    centerline_coords = np.array(centerline.coords)
+
+    # Compute segment lengths and cumulative lengths
+    dx = np.diff(centerline_coords[:, 0])
+    dy = np.diff(centerline_coords[:, 1])
+    segment_lengths = np.hypot(dx, dy)
+    cumulative_lengths = np.concatenate(([0], np.cumsum(segment_lengths)))
+
+    # Project points onto the centerline
+    proj_distances = np.array([centerline.project(Point(x, y)) for x, y in zip(px, py)])
+
+    # Find the segment index for each projection distance
+    segment_indices = np.searchsorted(cumulative_lengths, proj_distances, side='right') - 1
+    segment_indices = np.clip(segment_indices, 0, len(dx) - 1)
+
+    # Get the segment coordinates
+    x1 = centerline_coords[segment_indices, 0]
+    y1 = centerline_coords[segment_indices, 1]
+    x2 = centerline_coords[segment_indices + 1, 0]
+    y2 = centerline_coords[segment_indices + 1, 1]
+
+    # Compute determinant (cross product)
+    det = (x2 - x1) * (py - y1) - (px - x1) * (y2 - y1)
+
+    # Determine side
     sides = np.zeros(len(points), dtype=int)
-
-    for i, point in enumerate(points):
-        proj_distance = centerline.project(point)
-        proj_point = centerline.interpolate(proj_distance)
-
-        # Avoid projecting beyond the end using a small epsilon
-        epsilon = 1e-6
-        next_proj_distance = proj_distance + epsilon if proj_distance + epsilon < center_length else proj_distance - epsilon
-        tangent_point = centerline.interpolate(next_proj_distance)
-        
-        dx, dy = tangent_point.x - proj_point.x, tangent_point.y - proj_point.y
-        length = np.hypot(dx, dy)
-        if length == 0:
-            sides[i] = 0
-            continue
-        
-        nx, ny = -dy / length, dx / length
-        vx, vy = point.x - proj_point.x, point.y - proj_point.y
-
-        dot = vx * nx + vy * ny
-        if np.isclose(dot, 0, atol=1e-8):
-            sides[i] = 0
-        elif dot > 0:
-            sides[i] = 1
-        else:
-            sides[i] = -1
+    sides[det > 1e-8] = 1
+    sides[det < -1e-8] = -1
 
     return sides
+
 
 # ------------------------- Damping Onset Function via Wavelet Decomposition ----------------------------- #
 
@@ -655,12 +662,16 @@ if __name__ == "__main__":
     ######################################################################################################################
     ########################################### User-Defined Parameters ##################################################
     ######################################################################################################################
-    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UE_clipped_perps_5m_hillslopes.gpkg"
+    #perpendiculars_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_single_part.gpkg"
+    #dem_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Terrain\WBT_Outputs\filled_dem.tif"
+    # centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_perpendiculars_1000m.gpkg"
+    # output_dir = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Test"
+    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelets\ME\WBT_Perpendiculars\ME_WBT_perps_100m_dissolve.gpkg"
     dem_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021.tif"
     ###############IMPORTANT################
     # The centerline path must be a multiline string with collected geometries (e.g. only a single line)
-    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UE_clipped.gpkg"
-    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelet Testing"
+    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelets\ME\WBT_Perpendiculars\ME_WBT_CL_dissolved.gpkg"
+    output_dir = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelets\ME\WBT_Perpendiculars"
 
     # Define depth increment
     depth_increment = 0.01  # Depth increment in meters
@@ -669,6 +680,7 @@ if __name__ == "__main__":
     poly_order = 9    # Polynomial order for Savitzky-Golay filter
     wavlet_threshold = 0.1
     minimum_depth = 1.5  # Minimum depth threshold to ignore damping onset before this depth
+    print_output = False
     ######################################################################################################################
     ############################################## Main Function Call ####################################################
     ################################################################################################################
@@ -692,7 +704,7 @@ if __name__ == "__main__":
         output_gpkg_path=output_gpkg_path, 
         centerline_gpkg=centerline_path,
         depth_increment=depth_increment,
-        print_output=True,
+        print_output=print_output,
         window_size=window_size,
         poly_order=poly_order,
         wavelet_threshold=wavlet_threshold,
@@ -702,3 +714,4 @@ if __name__ == "__main__":
     from call_plot_cross_sections import run_cross_section_plotting
     run_cross_section_plotting(perpendiculars_path=perpendiculars_path, dem_raster=dem_path, json_file=json_path)
 
+ 

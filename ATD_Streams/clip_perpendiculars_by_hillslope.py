@@ -246,10 +246,10 @@ def clip_perpendiculars_by_hillslope(perpendiculars_path, hillslope_path, center
 
 if __name__ == "__main__":
     # Define input paths
-    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UE_clipped_perps_5m.gpkg"
-    hillslope_path = r"Y:\ATD\GIS\Bennett\Bennett_watersheds.gpkg"
-    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UE_clipped.gpkg"
+    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelets\ME\Buffered Perpendiculars\ME_multi_perps_5m.gpkg"
+    hillslope_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\WBT_Outputs\hillslopes_200k.gpkg"
+    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\ME_clipped.gpkg"
     
     # Define output path
-    output_gpkg = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UE_clipped_perps_5m_watershed.gpkg"
+    output_gpkg = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\ATD_algorithm\Wavelets\ME\Buffered Perpendiculars\ME_multi_perps_hillslope_5m.gpkg"
     clip_perpendiculars_by_hillslope(perpendiculars_path, hillslope_path, centerline_path, output_gpkg)
