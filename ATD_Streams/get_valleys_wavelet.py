@@ -383,15 +383,15 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(
 
 # ------------------------------ Main Function ----------------------------------- #
 
-def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerline_gpkg=None, 
+def get_valleys(perpendiculars_path, dem_path, output_folder, output_gpkg_path=None, centerline_gpkg=None, 
          depth_increment=0.1, print_output=True, window_size=11, poly_order=2, wavelet_threshold=0.1, minimum_depth=1):
     """
     Main function to process GeoPackage lines, compute hydraulic radii, determine leveling-out elevations,
     identify damping onset via wavelet decomposition, and generate plots and output GeoPackage.
 
     Parameters:
-        gpkg_path (str): Path to the input GeoPackage containing perpendicular lines.
-        raster_path (str): Path to the raster file (e.g., DEM).
+        perpendiculars_path (str): Path to the input GeoPackage containing perpendicular lines.
+        dem_path (str): Path to the filled dem.
         output_folder (str): Directory to save outputs.
         output_gpkg_path (str, optional): Path to save the output GeoPackage polygon.
         centerline_gpkg (str, optional): Path to the GeoPackage containing the centerline.
@@ -431,8 +431,8 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 
     logging.info("Script started.")
     logging.info(f"User-defined parameters:")
-    logging.info(f"  gpkg_path: {gpkg_path}")
-    logging.info(f"  raster_path: {raster_path}")
+    logging.info(f"  perpendiculars_path: {perpendiculars_path}")
+    logging.info(f"  dem_path: {dem_path}")
     logging.info(f"  output_folder: {output_folder}")
     logging.info(f"  output_gpkg_path: {output_gpkg_path}")   
     logging.info(f"  centerline_gpkg: {centerline_gpkg}")
@@ -445,10 +445,10 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
 
     # Read input GeoPackages
     try:
-        gdf = gpd.read_file(gpkg_path)
+        gdf = gpd.read_file(perpendiculars_path)
         logging.info(f"Read {len(gdf)} perpendicular lines from GeoPackage.")
     except Exception as e:
-        logging.error(f"Failed to read GeoPackage at {gpkg_path}: {e}")
+        logging.error(f"Failed to read GeoPackage at {perpendiculars_path}: {e}")
         return
 
     try:
@@ -479,7 +479,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
     flow_depths = {}  # Dictionary to store flow depths for each segment
 
     try:
-        with rasterio.open(raster_path) as raster:
+        with rasterio.open(dem_path) as raster:
             nodata_value = raster.nodata
             total_lines = len(gdf)
             logging.info(f"Total lines to process: {total_lines}")
@@ -612,7 +612,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                             logging.error(f"Line {idx}: Failed to save insufficient data plot at {fig_save_path1}: {e}")
 
     except Exception as e:
-        logging.error(f"Failed to open or process raster at {raster_path}: {e}")
+        logging.error(f"Failed to open or process raster at {dem_path}: {e}")
         return
 
     # Save flow depths to a json file
@@ -656,7 +656,7 @@ if __name__ == "__main__":
     ########################################### User-Defined Parameters ##################################################
     ######################################################################################################################
     perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\Perpendiculars\UE_clipped_perps_5m_hillslopes.gpkg"
-    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021.tif"
+    dem_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\dem_2021.tif"
     ###############IMPORTANT################
     # The centerline path must be a multiline string with collected geometries (e.g. only a single line)
     centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley Centerlines\UE_clipped.gpkg"
@@ -685,9 +685,9 @@ if __name__ == "__main__":
 
     start_time = datetime.now()
     # Execute main function
-    json_path = main(
-        gpkg_path=perpendiculars_path,
-        raster_path=raster_path,
+    json_path = get_valleys(
+        perpendiculars_path=perpendiculars_path,
+        dem_path=dem_path,
         output_folder=output_folder,
         output_gpkg_path=output_gpkg_path, 
         centerline_gpkg=centerline_path,
@@ -700,5 +700,5 @@ if __name__ == "__main__":
     )
     print(f"Execution time: {datetime.now() - start_time}")
     from call_plot_cross_sections import run_cross_section_plotting
-    run_cross_section_plotting(perpendiculars_path=perpendiculars_path, dem_raster=raster_path, json_file=json_path)
+    run_cross_section_plotting(perpendiculars_path=perpendiculars_path, dem_raster=dem_path, json_file=json_path)
 

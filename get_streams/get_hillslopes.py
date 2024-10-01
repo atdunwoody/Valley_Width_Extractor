@@ -13,16 +13,25 @@ working_dir = os.path.join(os.path.dirname(dem), "WBT_Outputs")
 os.makedirs(working_dir, exist_ok=True)
 wbt.set_working_dir(working_dir)
 
-breached_dem = "breached_dem.tif"
-filled_dem = "filled_dem.tif"
 flow_dir = "flow_direction.tif"
-flow_accum = "flow_accumulation.tif"
-streams = "streams_10k.tif"
-streams_vector = "streams.shp"
-hillslopes = "hillslopes_10k.tif"
+streams = "streams_300k.tif"
+hillslopes = "hillslopes_300k.tif"
+hillslopes_vector = hillslopes.replace(".tif", ".shp")
 geomorphons = "geomorphons_filled.tif"
 ridges = "ridges_filled.tif"
+
 wbt.hillslopes(flow_dir, streams, hillslopes)
+# Convert Hillslopes Raster to Vector Polygons
+wbt.raster_to_vector_polygons(
+    i=hillslopes,              # Input raster file
+    output=hillslopes_vector,  # Output vector shapefile
+
+)
+
+import geopandas as gpd
+gdf = gpd.read_file(os.path.join(working_dir, hillslopes_vector))
+hillslopes_vector_out = hillslopes_vector.replace(".shp", ".gpkg")
+gdf.to_file(os.path.join(working_dir, hillslopes_vector_out), driver="GPKG")
 
 # wbt.geomorphons(
 #     filled_dem, 
