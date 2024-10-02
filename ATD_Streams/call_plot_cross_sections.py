@@ -1,7 +1,7 @@
 # call_plot_cross_sections.py
 
 import logging
-from plot_cross_sections import main
+from plot_cross_sections import plot_cross_section
 import os
     
 def run_cross_section_plotting(perpendiculars_path, dem_raster, json_file):
@@ -12,7 +12,7 @@ def run_cross_section_plotting(perpendiculars_path, dem_raster, json_file):
     os.makedirs(output_folder, exist_ok=True)
     # Call the main function from plot_cross_sections.py
     try:
-        main(perpendiculars_path, dem_raster, json_file, output_folder)
+        plot_cross_section(perpendiculars_path, dem_raster, json_file, output_folder)
         print("Cross-section plots have been generated successfully.")
     except Exception as e:
         logging.error(f"An error occurred: {e}")

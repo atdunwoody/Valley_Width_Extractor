@@ -8,54 +8,10 @@ import os
 import logging
 import sys
 import argparse
+from determine_side_of_centerline import sample_raster_along_line
 
-def sample_raster_along_line(line, raster, n_points=100):
-    """
-    Sample raster values along a LineString or MultiLineString.
 
-    Parameters:
-        line (LineString or MultiLineString): The line along which to sample.
-        raster (rasterio.io.DatasetReader): The opened raster dataset.
-        n_points (int): Number of points to sample along the line.
-
-    Returns:
-        distances (array): Distances along the line.
-        elevations (array): Elevations sampled from the raster.
-        points (list): Shapely Point objects of sampled points.
-    """
-    # Generate equally spaced distances along the line
-    distances = np.linspace(0, line.length, n_points)
-    points = [line.interpolate(distance) for distance in distances]
-
-    xs = np.array([point.x for point in points])
-    ys = np.array([point.y for point in points])
-
-    # Prepare coordinates for sampling
-    coords = [(x, y) for x, y in zip(xs, ys)]
-
-    # Sample the raster at these coordinates
-    try:
-        elevations = [val[0] if val else np.nan for val in raster.sample(coords)]
-    except Exception as e:
-        logging.error(f"Error sampling raster: {e}")
-        return [], [], []
-
-    elevations = np.array(elevations)
-
-    # Handle nodata values
-    nodata = raster.nodata
-    if nodata is not None:
-        valid_data_mask = elevations != nodata
-    else:
-        valid_data_mask = ~np.isnan(elevations)
-
-    distances = distances[valid_data_mask]
-    elevations = elevations[valid_data_mask]
-    points = [points[i] for i in range(len(points)) if valid_data_mask[i]]
-
-    return distances, elevations, points
-
-def main(lines_gpkg_path, raster_path, json_path, output_folder):
+def plot_cross_section(lines_gpkg_path, raster_path, json_path, output_folder):
     # Read lines from GeoPackage
     try:
         gdf = gpd.read_file(lines_gpkg_path)
@@ -128,7 +84,7 @@ def main(lines_gpkg_path, raster_path, json_path, output_folder):
 
         plt.xlabel('Distance along line (m)')
         plt.ylabel('Elevation (m)')
-        plt.title(f'Terrain Cross-Section at Line {idx}')
+        plt.title(f'Terrain Cross-Section at Line {idx+1}')
         plt.legend()
         #place legend in lower left corner
         plt.legend(loc='lower left')
@@ -158,4 +114,4 @@ if __name__ == '__main__':
     parser.add_argument('output_folder', help='Folder to save output plots')
     args = parser.parse_args()
 
-    main(args.lines_gpkg, args.dem_raster, args.json_file, args.output_folder)
+    plot_cross_section(args.lines_gpkg, args.dem_raster, args.json_file, args.output_folder)

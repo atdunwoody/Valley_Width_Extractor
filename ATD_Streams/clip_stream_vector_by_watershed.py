@@ -69,7 +69,7 @@ def clip_gpkg_by_layers(clipping_gpkg_path, input_gpkg_path, output_folder):
 
 if __name__ == "__main__":
     clipping_gpkg_path = r"Y:\ATD\GIS\ETF\Watershed_Boundaries.gpkg"
-    input_gpkg_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\streams_100k.gpkg"
+    input_gpkg_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Upper\streams_100k.gpkg"
     output_folder = r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines"
     
     clip_gpkg_by_layers(clipping_gpkg_path, input_gpkg_path, output_folder)
