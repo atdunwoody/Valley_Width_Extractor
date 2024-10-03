@@ -20,8 +20,8 @@ logging.basicConfig(
 )
 
 perpendiculars_list = [
-    
-    # r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_perpendiculars_10m.gpkg"
+    r"Y:\ATD\GIS\Bennett\Valley Geometry\Perpendiculars\ME_smooth_perpendiculars_200m.gpkg"
+    # r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_smooth_perpendiculars_200m.gpkg"
     #r"Y:\ATD\GIS\ETF\Valley Geometry\Perpendiculars\LM2_smooth_perpendiculars_10m.gpkg",
     # r"Y:\ATD\GIS\ETF\Valley Geometry\Perpendiculars\LPM_smooth_perpendiculars_10m.gpkg",
     # r"Y:\ATD\GIS\ETF\Valley Geometry\Perpendiculars\MM_smooth_perpendiculars_10m.gpkg",
@@ -31,8 +31,9 @@ perpendiculars_list = [
 ]
 
 centerlines_list = [
+    r"Y:\ATD\GIS\Bennett\Valley Geometry\Centerlines\ME_centerline.gpkg"
     # r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_single_part.gpkg"
-    #r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\LM2_centerline.gpkg",
+    # r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\LM2_centerline.gpkg",
     # r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\LPM_centerline.gpkg",
     # r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\MM_centerline.gpkg",
     # r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\MPM_centerline.gpkg",
@@ -40,16 +41,17 @@ centerlines_list = [
     # r"Y:\ATD\GIS\ETF\Valley Geometry\Centerlines\UM2_centerline.gpkg",
 ]
 
-dem_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\filled_dem.tif"
-
+# dem_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\filled_dem.tif"
 # dem_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Terrain\WBT_Outputs\filled_dem.tif"
+dem_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\WBT_Outputs\filled_dem.tif"
 
 hillslopes_path = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\hillslopes_100k.gpkg"
 
 ###############IMPORTANT################
 # The centerline path must be a multiline string with collected geometries (e.g., only a single line)
+output_dir = r"Y:\ATD\GIS\Bennett\Valley Bottoms\ATD_Algorithm\Wavelets"
 # output_dir = r"Y:\ATD\GIS\ETF\Valley Bottoms\ATD_Algorithm\Wavelets"
-output_dir = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Outputs\Wavelets"
+# output_dir = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Outputs\Wavelets"
 
 # Define depth increment
 depth_increment = 0.01  # Depth increment in meters

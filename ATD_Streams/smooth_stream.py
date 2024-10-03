@@ -53,12 +53,9 @@ def process_geometry(geometry, interval):
     if isinstance(geometry, LineString):
         return interpolate_linestring(geometry, interval)
     elif isinstance(geometry, MultiLineString):
-        # Flatten all LineStrings in the MultiLineString into a single LineString
-        flattened_coords = []
-        for line in geometry.geoms:
-            flattened_coords.extend(line.coords)
-        combined_line = LineString(flattened_coords)
-        return interpolate_linestring(combined_line, interval)
+        # Process each LineString in the MultiLineString separately
+        smoothed_lines = [interpolate_linestring(line, interval) for line in geometry.geoms]
+        return MultiLineString(smoothed_lines)
     else:
         raise TypeError("Geometry must be a LineString or MultiLineString.")
 
@@ -110,8 +107,8 @@ def interpolate_geopackage(
 
     # Check for LineString or MultiLineString geometries
     valid_geom_types = ['LineString', 'MultiLineString']
-    if not all(gdf.geometry.type.isin(valid_geom_types)):
-        print(f"Layer '{layer_name}' does not contain only LineString or MultiLineString geometries.")
+    if not gdf.geometry.type.isin(valid_geom_types).all():
+        print(f"Layer '{layer_name}' contains non-LineString or MultiLineString geometries.")
         sys.exit(1)
 
     # Process each geometry
@@ -122,7 +119,7 @@ def interpolate_geopackage(
             smoothed_geometries.append(smoothed_geom)
         except Exception as e:
             print(f"Error processing geometry at index {idx}: {e}")
-            sys.exit(1)
+            smoothed_geometries.append(None)  # Skip problematic geometries
 
     # Create a new GeoDataFrame with smoothed geometries
     smoothed_gdf = gdf.copy()
@@ -130,14 +127,9 @@ def interpolate_geopackage(
 
     # Save to the output GeoPackage
     try:
-        # Check if output GeoPackage already exists
-        if fiona.supported_drivers.get("GPKG"):
-            import os
-            os.makedirs(os.path.dirname(output_gpkg), exist_ok=True)
-            smoothed_gdf.to_file(output_gpkg, driver="GPKG")
-        else:
-            print("GeoPackage driver not supported.")
-            sys.exit(1)
+        import os
+        os.makedirs(os.path.dirname(output_gpkg), exist_ok=True)
+        smoothed_gdf.to_file(output_gpkg, driver="GPKG")
         print(f"Smoothed LineStrings saved to '{output_gpkg}' in layer '{layer_name}'.")
     except Exception as e:
         print(f"Error writing to output GeoPackage: {e}")
