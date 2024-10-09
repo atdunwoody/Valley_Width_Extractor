@@ -9,9 +9,13 @@ def create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=5
     # Load the centerline from the geopackage
     gdf = gpd.read_file(centerline_path)
     
-    # Dissolve and merge the centerlines into one continuous geometry
-    merged_geometry = linemerge(gdf.geometry.unary_union)
+    try:
+        # Dissolve and merge the centerlines into one continuous geometry
+        merged_geometry = linemerge(gdf.geometry.unary_union)
 
+    except Exception as e:
+        print(f"Error merging centerlines: {e}")
+        merged_geometry = gdf.geometry.unary_union
     # Handle MultiLineString appropriately using `geoms`
     if isinstance(merged_geometry, MultiLineString):
         line_parts = merged_geometry.geoms

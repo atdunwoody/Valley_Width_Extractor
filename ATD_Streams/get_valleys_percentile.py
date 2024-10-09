@@ -8,6 +8,8 @@ from scipy.signal import savgol_filter
 import json  # Added for JSON operations
 from tqdm import tqdm  # Added for progress bar
 from sklearn.preprocessing import StandardScaler  # Added for scaling
+from scipy.ndimage import gaussian_filter1d  # Added for Gaussian filter
+
 
 def sample_raster_along_line(line, raster, n_points=None, nodata_value=None):
     """
@@ -176,7 +178,7 @@ def compute_wetted_perimeter(x, y, depth):
     return perimeter
 
 
-def smooth_ratio(ratio, window_length=11, polyorder=3):
+def smooth_ratio(ratio, window_length=11, polyorder=3, filter_type="Gaussian"):
     """
     Smooth the ratio using Savitzky-Golay filter.
 
@@ -188,22 +190,25 @@ def smooth_ratio(ratio, window_length=11, polyorder=3):
     Returns:
         smoothed_ratio (np.ndarray): The smoothed ratio array.
     """
-    # Ensure window_length is appropriate given the size of the ratio array
-    if len(ratio) < window_length:
-        window_length = len(ratio)
-        if window_length % 2 == 0:
-            window_length -= 1
+    if filter_type == 'savgol':
+        # Ensure window_length is appropriate given the size of the ratio array
+        if len(ratio) < window_length:
+            window_length = len(ratio)
+            if window_length % 2 == 0:
+                window_length -= 1
 
-    # Ensure polyorder is less than window_length
-    if polyorder >= window_length:
-        polyorder = window_length - 1
+        # Ensure polyorder is less than window_length
+        if polyorder >= window_length:
+            polyorder = window_length - 1
 
-    return savgol_filter(ratio, window_length, polyorder)
+        return savgol_filter(ratio, window_length, polyorder)
+    elif filter_type == "Gaussian":
+        return gaussian_filter1d(ratio, window_length)
 
 
-def find_leveling_point_depth(x, y, depth_increment=0.05, polynomial_order=4, 
-                             smooth=True, window_length=11, polyorder=9, 
-                             percentile=20, max_depth=None):
+def find_leveling_point_depth(x, y, depth_increment, polynomial_order, 
+                             smooth, window_length, polyorder, 
+                             percentile, max_depth):
     """
     Vectorized determination of leveling out elevation based on cross-sectional area and wetted perimeter ratios.
     
@@ -240,19 +245,17 @@ def find_leveling_point_depth(x, y, depth_increment=0.05, polynomial_order=4,
     if smooth:
         ratio = smooth_ratio(ratio, window_length, polyorder)
 
-    # Scale the depth data
-    scaler = StandardScaler()
-    depth_scaled = scaler.fit_transform(depth.reshape(-1, 1)).flatten()
 
     try:
-        poly_coeffs = np.polyfit(depth_scaled, ratio, polynomial_order)
-        poly_fit = np.polyval(poly_coeffs, depth_scaled)
+        poly_coeffs = np.polyfit(depth, ratio, polynomial_order)
+        poly_fit = np.polyval(poly_coeffs, depth)
     except np.RankWarning as e:
         print(f"Polyfit RankWarning: {e}")
         return None
 
     # First and second derivatives
-    first_derivative = np.gradient(poly_fit, depth)
+    # first_derivative = np.gradient(poly_fit, depth)
+    first_derivative = np.gradient(ratio, depth)
     second_derivative = np.gradient(first_derivative, depth)
 
     # Identify leveling out point where second derivative approaches zero
@@ -262,7 +265,7 @@ def find_leveling_point_depth(x, y, depth_increment=0.05, polynomial_order=4,
     channel_depth_threshold = np.percentile(true_depth, percentile)
 
     filtered_inflection_indices = inflection_indices[true_depth[inflection_indices] > channel_depth_threshold]
-    print(f"Max depth considered: {np.max(true_depth)}")
+    #print(f"Max depth considered: {np.max(true_depth)}")
 
     if len(filtered_inflection_indices) > 1:
         leveling_out_elevation = depth[filtered_inflection_indices[1]]
@@ -275,8 +278,8 @@ def find_leveling_point_depth(x, y, depth_increment=0.05, polynomial_order=4,
 
 
 def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increment=0.1, fig_output_path='', 
-                                                      polynomial_order=4, smooth=False, window_length=5, polyorder=4, 
-                                                      print_output=True, second_derivative_num=None, percentile=20, max_depth=None):
+                                                      polynomial_order=3, smooth=True, window_length=5, polyorder=4, 
+                                                      print_output=True, percentile=20, max_depth=None):
     """
     Vectorized plotting of cross-sectional area to wetted perimeter ratio.
 
@@ -349,7 +352,7 @@ def plot_cross_section_area_to_wetted_perimeter_ratio(x, y, idx='', depth_increm
 
 
 def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerline_gpkg=None, 
-         second_derivative_num=None, percentile=20, print_output=True, max_depth=None):
+          percentile=20, print_output=True, max_depth=None):
     """
     Vectorized main function to process GeoPackage lines, compute hydraulic radii, determine leveling-out elevations,
     and generate output GeoPackage.
@@ -393,7 +396,7 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
         for idx, row in tqdm(gdf.iterrows(), total=total_lines, desc="Processing lines"):
             line = row.geometry
             if isinstance(line, (LineString, MultiLineString)):
-                print(f'Processing line {idx + 1} of {total_lines}')
+                # print(f'Processing line {idx + 1} of {total_lines}')
                 valid_distances, valid_raster_values, valid_points = sample_raster_along_line(
                     line, raster, nodata_value=nodata_value
                 )
@@ -408,7 +411,6 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                     idx=idx,
                     fig_output_path=output_folder,
                     print_output=print_output,
-                    second_derivative_num=second_derivative_num,
                     percentile=percentile,
                     max_depth=max_depth  # Pass the max_depth parameter
                 )
@@ -434,8 +436,8 @@ def main(gpkg_path, raster_path, output_folder, output_gpkg_path=None, centerlin
                         left_points.append(closest_left_point)
                         right_points.append(closest_right_point)
 
-                        print(f"Leveling out point on left side for line index {idx}: {closest_left_point} at elevation {leveling_out_elevation}")
-                        print(f"Leveling out point on right side for line index {idx}: {closest_right_point} at elevation {leveling_out_elevation}")
+                        #print(f"Leveling out point on left side for line index {idx}: {closest_left_point} at elevation {leveling_out_elevation}")
+                        #print(f"Leveling out point on right side for line index {idx}: {closest_right_point} at elevation {leveling_out_elevation}")
             else:
                 geometry_type = line.geom_type
                 print(f'Skipping non-LineString geometry at index {idx} with geometry type: {geometry_type}')
@@ -474,19 +476,21 @@ Uncomment to run a Monte Carlo on a single watershed with depth percentile metho
 """
 
 if __name__ == "__main__":
-    perpendiculars_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL_perpendiculars_100m.gpkg"
-    raster_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Terrain\WBT_Outputs\filled_dem.tif"
-    centerline_path = r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\Inputs\Valley_CL.gpkg"
-
+    perpendiculars_path = r"Y:\ATD\GIS\Bennett\Valley Geometry\Perpendiculars\UM_smooth_perpendiculars_10m.gpkg"
+    raster_path = r"Y:\ATD\GIS\Bennett\DEMs\LIDAR\OT 2021\WBT_Outputs\filled_dem.tif"
+    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Geometry\Centerlines\UM_centerline.gpkg"
+    output_folder = r"Y:\ATD\GIS\Bennett\Valley Bottoms\ATD_algorithm\Percentile\UM"
+    print_output = False
+    percentile = 20
     # Define output paths
     from datetime import datetime
     output_folder = os.path.join(
-        r"Y:\ATD\GIS\Valley Bottom Testing\Control Valleys\ATD_Streams\Percentile", 
-        f"{datetime.now().strftime('%Y%m%d_%Hh%Mm')}"
+        output_folder, 
+        f"{datetime.now().strftime('%Y%m%d_%Hh%Mm')}_{percentile}_percentile"
     )
     os.makedirs(output_folder, exist_ok=True)
 
-    output_gpkg_name = f"Valley_Footprint_6th_Per_0.01depth.gpkg"
+    output_gpkg_name = f"Valley_Footprint_{percentile}th_Per_0.01depth.gpkg"
     output_gpkg_path = os.path.join(output_folder, output_gpkg_name)
 
     # Define maximum depth (e.g., 10 meters)
@@ -498,8 +502,8 @@ if __name__ == "__main__":
         output_folder=output_folder,
         output_gpkg_path=output_gpkg_path, 
         centerline_gpkg=centerline_path, 
-        percentile=6,
-        print_output=True,
+        percentile=percentile,
+        print_output=print_output,
         max_depth=max_depth  # Pass the max_depth parameter
     )
 
